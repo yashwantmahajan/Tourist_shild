@@ -1,0 +1,197 @@
+/**
+ * Ambulance Tracking Styles
+ * Custom CSS for ambulance live tracking interface
+ */
+
+/* Modal Customizations */
+#ambulanceTrackingModal .modal-xl {
+    max-width: 1200px;
+}
+
+#ambulanceTrackingModal .modal-content {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+#ambulanceTrackingModal .modal-header {
+    border-bottom: none;
+    padding: 1.5rem 2rem;
+}
+
+#ambulanceTrackingModal .modal-body {
+    padding: 0;
+}
+
+/* Map Container */
+#ambulanceMap {
+    position: relative;
+    z-index: 1;
+}
+
+/* Custom Marker Animations */
+.custom-ambulance-marker,
+.custom-tourist-marker {
+    animation: markerPulse 2s ease-in-out infinite;
+}
+
+@keyframes markerPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* Status Badge Animations */
+.badge {
+    transition: all 0.3s ease;
+}
+
+.badge.bg-warning {
+    animation: badgeGlow 2s ease-in-out infinite;
+}
+
+@keyframes badgeGlow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(251, 191, 36, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(251, 191, 36, 0.8);
+    }
+}
+
+/* Progress Bar */
+.progress {
+    background-color: #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    transition: width 1s ease-in-out;
+}
+
+/* Pulse Animation for Live Indicator */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.2);
+    }
+}
+
+.pulse-animation {
+    animation: pulse 2s ease-in-out infinite;
+    display: inline-block;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    #ambulanceTrackingModal .modal-xl {
+        max-width: 100%;
+        margin: 0;
+    }
+
+    #ambulanceTrackingModal .modal-content {
+        border-radius: 0;
+        height: 100vh;
+    }
+
+    #ambulanceMap {
+        height: 400px !important;
+    }
+
+    #ambulanceTrackingModal .modal-body .row {
+        font-size: 0.9rem;
+    }
+}
+
+/* Leaflet Popup Customization */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.leaflet-popup-content {
+    margin: 12px;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Route Line Animation */
+@keyframes dashAnimation {
+    to {
+        stroke-dashoffset: -20;
+    }
+}
+
+/* Alert Success Animation */
+.alert-success {
+    animation: slideInDown 0.5s ease-out;
+}
+
+@keyframes slideInDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Status Indicator Colors */
+.status-assigned {
+    color: #f59e0b;
+}
+
+.status-on-the-way {
+    color: #3b82f6;
+}
+
+.status-arrived {
+    color: #10b981;
+}
+
+/* ETA Display */
+#ambulanceETA {
+    font-size: 1.5rem;
+    font-weight: 700;
+    transition: color 0.3s ease;
+}
+
+/* Distance Display */
+#ambulanceDistance {
+    font-size: 1.2rem;
+    color: #64748b;
+}
+
+/* Loading State */
+.tracking-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 500px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.tracking-loading i {
+    font-size: 3rem;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}

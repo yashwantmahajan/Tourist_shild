@@ -1,0 +1,606 @@
+{% extends "base.html" %}
+
+{% block title %}Police Command Center - Smart Tourist Shield AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Light Theme for Police Dashboard - Matching Admin */
+    body {
+        background: #f8f9fa;
+        color: #1f2937;
+    }
+
+    .dashboard-wrapper {
+        background: #f8f9fa;
+    }
+
+    .sidebar {
+        background: white;
+        border-right: 1px solid #e5e7eb;
+    }
+
+    .sidebar-brand {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+        height: 100%;
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: white;
+        margin-bottom: 1rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-label {
+        color: #6b7280;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .glass-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-gradient {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        transition: transform 0.2s;
+    }
+
+    .btn-gradient:hover {
+        transform: translateY(-1px);
+        color: white;
+        opacity: 0.9;
+    }
+
+    .table-custom {
+        border-collapse: separate;
+        border-spacing: 0 8px;
+    }
+
+    .table-custom tr {
+        background: white;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .map-container {
+        height: 500px;
+        border-radius: 12px;
+        z-index: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Police Dashboard Wrapper -->
+<div class="dashboard-wrapper" style="display: flex;">
+    <!-- Sidebar -->
+    <aside class="sidebar" style="width: 260px; height: 100vh; position: fixed; display: flex; flex-direction: column;">
+        <div class="sidebar-header" style="padding: 1.5rem; display: flex; align-items: center; gap: 1rem;">
+            <i class="fas fa-shield-alt" style="font-size: 2rem; color: #667eea;"></i>
+            <div>
+                <div class="sidebar-brand" style="font-weight: 800; font-size: 1.25rem;" data-i18n="brand_police">Police
+                    Command</div>
+                <small style="color: #6b7280;" data-i18n="portal_police">Law Enforcement Portal</small>
+            </div>
+        </div>
+
+        <ul class="sidebar-menu" style="list-style: none; padding: 1rem; flex-grow: 1;">
+            <li class="menu-item" style="margin-bottom: 0.5rem;">
+                <a href="#" class="menu-link"
+                    style="text-decoration: none; color: #374151; display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 8px; font-weight: 500;">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span data-i18n="menu_overview">Overview</span>
+                </a>
+            </li>
+            <li class="menu-item" style="margin-bottom: 0.5rem;">
+                <a href="#sos" class="menu-link"
+                    style="text-decoration: none; color: #374151; display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 8px; font-weight: 500;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span data-i18n="menu_sos_dispatch">SOS Dispatch</span>
+                </a>
+            </li>
+            <li class="menu-item" style="margin-bottom: 0.5rem;">
+                <a href="#criminals" class="menu-link"
+                    style="text-decoration: none; color: #374151; display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 8px; font-weight: 500;">
+                    <i class="fas fa-user-secret"></i>
+                    <span data-i18n="menu_criminals">Criminal Alerts</span>
+                </a>
+            </li>
+            <li class="menu-item" style="margin-bottom: 0.5rem;">
+                <a href="#alerts" class="menu-link"
+                    style="text-decoration: none; color: #374151; display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 8px; font-weight: 500;">
+                    <i class="fas fa-bell"></i>
+                    <span data-i18n="menu_critical">Critical Alerts</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="user-profile"
+            style="padding: 1.5rem; border-top: 1px solid #e5e7eb; display: flex; align-items: center; gap: 0.75rem;">
+            <div class="user-avatar"
+                style="width: 40px; height: 40px; border-radius: 50%; min-width: 40px; display: flex; align-items: center; justify-content: center; color: white; background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                P</div>
+            <div class="user-info" style="flex-grow: 1; overflow: hidden;">
+                <div class="user-name"
+                    style="font-weight: 600; font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    {{ current_user.username }}</div>
+                <div class="user-role" style="font-size: 0.75rem; color: #6b7280;" data-i18n="role_police">Police
+                    Officer</div>
+            </div>
+            <a href="{{ url_for('logout') }}" title="Logout" style="color: #ef4444;">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" style="flex-grow: 1; margin-left: 260px; padding: 2rem;">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1" data-i18n="police_header">Police Command Center</h2>
+                <p class="text-muted mb-0" data-i18n="police_subheader">Real-time emergency response &amp; monitoring
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-gradient btn-sm" onclick="location.reload()">
+                    <i class="fas fa-sync-alt"></i> <span data-i18n="btn_refresh">Refresh</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-value" style="color: #f59e0b;">{{ stats.active_sos }}</div>
+                    <div class="stat-label" data-i18n="stat_active_sos">Active SOS</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-danger">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="stat-value" style="color: #ef4444;">{{ stats.critical_alerts }}</div>
+                    <div class="stat-label" data-i18n="stat_critical_alerts">Critical Alerts</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #8b5cf6;">
+                        <i class="fas fa-user-secret"></i>
+                    </div>
+                    <div class="stat-value" style="color: #8b5cf6;">{{ stats.criminal_count }}</div>
+                    <div class="stat-label" data-i18n="stat_active_criminals">Active Criminals</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-success">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-value" style="color: #10b981;">{{ stats.total_tourists }}</div>
+                    <div class="stat-label" data-i18n="stat_total_tourists">Total Tourists</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SOS Dispatch Panel -->
+        <div id="sos" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4" style="border: 2px solid #667eea;">
+                    <h5 style="color: #667eea;" class="mb-4">
+                        <i class="fas fa-siren-on me-2"></i>
+                        <span data-i18n="sos_police_panel">Active SOS Dispatch - Police Units</span>
+                    </h5>
+
+                    {% if sos_list %}
+                    <div class="row g-3">
+                        {% for sos in sos_list %}
+                        <div class="col-md-6">
+                            <div class="alert"
+                                style="background: white; border: 1px solid #e5e7eb; border-left: 4px solid #667eea;">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 fw-bold">
+                                            {{ sos.tourist.name }}
+                                            <span class="badge" style="background: #667eea; color: white;">{{
+                                                sos.tourist.digital_id }}</span>
+                                        </h6>
+                                        <small class="d-block mb-2 text-muted">
+                                            <i class="fas fa-map-pin me-1"></i>{{ sos.location }}
+                                        </small>
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-clock me-1"></i>{{ sos.created_at.strftime('%Y-%m-%d
+                                            %H:%M:%S') }}
+                                        </small>
+                                        <span
+                                            class="badge mt-2 {% if sos.status == 'pending' %}bg-warning{% else %}bg-info{% endif %}">
+                                            {{ sos.status.upper() }}
+                                        </span>
+                                    </div>
+                                </div>
+                                {% if sos.status == 'pending' %}
+                                <button class="btn btn-gradient btn-sm w-100 mt-3" onclick="dispatchSOS({{ sos.id }})">
+                                    <i class="fas fa-truck me-2"></i>
+                                    <span data-i18n="dispatch_police">DISPATCH POLICE UNITS</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-info w-100 mt-2"
+                                        onclick="showRouteToTourist({{ sos.latitude or 0 }}, {{ sos.longitude or 0 }})"
+                                        {% if not sos.latitude %}disabled{% endif %}>
+                                    <i class="fas fa-route"></i> Route to Tourist
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 3rem; opacity: 0.5;"></i>
+                        <p class="mt-3 text-muted" data-i18n="no_sos">No active SOS requests</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Tourist Monitoring Table -->
+        <div id="tourists" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="mb-0" style="color: #667eea;">
+                            <i class="fas fa-users me-2"></i>
+                            <span data-i18n="live_tourist_monitoring">Live Tourist Monitoring</span>
+                        </h5>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-custom">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_id">ID</th>
+                                    <th data-i18n="th_name">Name</th>
+                                    <th data-i18n="th_safety_score">Safety Score</th>
+                                    <th data-i18n="th_status">Status</th>
+                                    <th data-i18n="th_location">Location</th>
+                                    <th data-i18n="th_actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tourist in tourists %}
+                                <tr>
+                                    <td><strong>{{ tourist.digital_id }}</strong></td>
+                                    <td>{{ tourist.name }}</td>
+                                    <td>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar bg-{{ 'success' if tourist.safety_score >= 80 else ('warning' if tourist.safety_score >= 50 else 'danger') }}"
+                                                style="width: {{ tourist.safety_score }}%"></div>
+                                        </div>
+                                        <small>{{ tourist.safety_score }}%</small>
+                                    </td>
+                                    <td>
+                                        <span
+                                            class="badge bg-{{ 'success' if tourist.safety_score >= 80 else ('warning' if tourist.safety_score >= 50 else 'danger') }}"
+                                            data-i18n-value="tourist_status" data-raw-value="{{ tourist.status }}">
+                                            {{ tourist.status }}
+                                        </span>
+                                    </td>
+                                    <td><small>{{ tourist.last_location }}</small></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary"
+                                            onclick="viewTouristDetails({{ tourist.id }}, '{{ tourist.name }}', '{{ tourist.digital_id }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <a href="/api/police/tourist/{{ tourist.id }}/download-info"
+                                            class="btn btn-sm btn-outline-success">
+                                            <i class="fas fa-download"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Criminal Detections -->
+        <div id="criminals" class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4" style="color: #8b5cf6;">
+                        <i class="fas fa-user-secret me-2"></i>
+                        <span data-i18n="criminal_detections">Criminal Detections</span>
+                    </h5>
+                    {% if criminal_detections %}
+                    {% for detection in criminal_detections %}
+                    <div class="mb-3 p-3"
+                        style="background: #faf5ff; border-left: 4px solid #8b5cf6; border-radius: 8px;">
+                        <strong>{{ detection.criminal.name }}</strong>
+                        <span class="badge bg-danger ms-2">{{ detection.criminal.risk_level }}</span>
+                        <br>
+                        <small class="text-muted">
+                            <i class="fas fa-map-pin"></i> {{ detection.location }} •
+                            <i class="fas fa-clock"></i> {{ detection.detected_at.strftime('%H:%M:%S') }}
+                        </small>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-muted" data-i18n="no_criminal">No recent criminal detections</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Critical Alerts -->
+            <div id="alerts" class="col-md-6">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4 text-danger">
+                        <i class="fas fa-bell me-2"></i>
+                        <span data-i18n="police_critical_alerts">Critical Alerts</span>
+                    </h5>
+                    {% if alerts %}
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        {% for alert in alerts %}
+                        <div class="mb-3 p-3"
+                            style="background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px;">
+                            <div class="fw-bold">{{ alert.message }}</div>
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>{{ alert.created_at.strftime('%H:%M:%S') }}
+                                {% if alert.tourist %}
+                                • {{ alert.tourist.digital_id }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted" data-i18n="no_critical">No critical alerts</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Map View -->
+        <div id="map" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4" style="color: #667eea;">
+                        <i class="fas fa-map-marked-alt me-2"></i>
+                        <span data-i18n="live_tourist_tracking">Live Tourist Tracking</span>
+                        <span class="badge ms-2" style="background: #667eea; color: white;">{{ tourists|length }}
+                            <span data-i18n="active_badge">Active</span></span>
+                    </h5>
+                    <div id="policeMap" class="map-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Administrative Reports -->
+        <div class="row g-4 mb-4" id="pdf">
+            <div class="col-12">
+                <h5 class="mb-3" style="color: #667eea;">
+                    <i class="fas fa-file-pdf me-2"></i>
+                    <span data-i18n="admin_reports">Administrative Reports &amp; Downloads</span>
+                </h5>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card p-3 text-center">
+                    <i class="fas fa-calendar-day mb-2" style="font-size: 1.5rem; color: #667eea;"></i>
+                    <h6 class="fw-bold mb-1" data-i18n="pdf_daily">Daily Summary</h6>
+                    <a href="{{ url_for('police_pdf_daily_summary') }}" class="btn btn-gradient btn-sm w-100 mt-2">
+                        <i class="fas fa-download me-1"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card p-3 text-center">
+                    <i class="fas fa-exclamation-triangle mb-2" style="font-size: 1.5rem; color: #ef4444;"></i>
+                    <h6 class="fw-bold mb-1" data-i18n="pdf_sos">SOS Report</h6>
+                    <a href="{{ url_for('police_pdf_sos_report') }}" class="btn btn-outline-primary btn-sm w-100 mt-2">
+                        <i class="fas fa-download me-1"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card p-3 text-center">
+                    <i class="fas fa-camera mb-2" style="font-size: 1.5rem; color: #8b5cf6;"></i>
+                    <h6 class="fw-bold mb-1" data-i18n="pdf_evidence">Evidence Logs</h6>
+                    <a href="{{ url_for('police_pdf_evidence_logs') }}"
+                        class="btn btn-outline-primary btn-sm w-100 mt-2">
+                        <i class="fas fa-download me-1"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card p-3 text-center">
+                    <i class="fas fa-file-alt mb-2" style="font-size: 1.5rem; color: #0ea5e9;"></i>
+                    <h6 class="fw-bold mb-1" data-i18n="pdf_efir">E-FIR Archive</h6>
+                    <a href="{{ url_for('police_pdf_efir_archive') }}"
+                        class="btn btn-outline-primary btn-sm w-100 mt-2">
+                        <i class="fas fa-download me-1"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Modal for Tourist Details -->
+<div class="modal fade" id="touristDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" data-i18n="tourist_info_modal">Tourist Information</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Translation helper
+    function _t(key) {
+        try {
+            const lang = localStorage.getItem('ts_lang') || 'en';
+            return (window.TRANSLATIONS && window.TRANSLATIONS[lang] && window.TRANSLATIONS[lang][key])
+                ? window.TRANSLATIONS[lang][key]
+                : (window.TRANSLATIONS && window.TRANSLATIONS['en'] && window.TRANSLATIONS['en'][key])
+                    ? window.TRANSLATIONS['en'][key]
+                    : key;
+        } catch (e) { return key; }
+    }
+
+    // ============ Google Maps Police Map ============
+    let policeMap, directionsRenderer;
+
+    function initPoliceMap() {
+        const mapEl = document.getElementById('policeMap');
+        if (!mapEl) return;
+
+        policeMap = new google.maps.Map(mapEl, {
+            center: { lat: 28.6139, lng: 77.2090 },
+            zoom: 12
+        });
+
+        directionsRenderer = new google.maps.DirectionsRenderer({ map: policeMap });
+
+        const tourists = [
+            {% for tourist in tourists %}
+            {% if tourist.current_lat and tourist.current_lng %}
+            {
+                lat: {{ tourist.current_lat }},
+                lng: {{ tourist.current_lng }},
+                name: "{{ tourist.name }}",
+                status: "{{ tourist.status }}",
+                location: "{{ tourist.last_location }}"
+            },
+            {% endif %}
+            {% endfor %}
+        ];
+
+        tourists.forEach(t => {
+            const color = t.status === 'Safe' ? '#22c55e'
+                        : t.status === 'Warning' ? '#f59e0b' : '#ef4444';
+            const marker = new google.maps.Marker({
+                position: { lat: t.lat, lng: t.lng },
+                map: policeMap,
+                title: t.name,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 9,
+                    fillColor: color,
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 2
+                }
+            });
+            const infoWindow = new google.maps.InfoWindow({
+                content: `<div><strong>${t.name}</strong><br>${t.location}<br><span style="color:${color}">${t.status}</span></div>`
+            });
+            marker.addListener('click', () => infoWindow.open(policeMap, marker));
+        });
+    }
+
+    function showRouteToTourist(touristLat, touristLng) {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            const directionsService = new google.maps.DirectionsService();
+            directionsService.route({
+                origin: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+                destination: { lat: touristLat, lng: touristLng },
+                travelMode: google.maps.TravelMode.DRIVING
+            }, function(result, status) {
+                if (status === 'OK') directionsRenderer.setDirections(result);
+            });
+        });
+    }
+
+    // SOS dispatch function
+    function dispatchSOS(sosId) {
+        if (confirm(_t('dispatch_confirm_police_q'))) {
+            fetch(`/api/admin/dispatch/${sosId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    location.reload();
+                })
+                .catch(error => console.error('Error:', error));
+        }
+    }
+
+    // View Tourist Details
+    function viewTouristDetails(id, name, digitalId) {
+        const modal = new bootstrap.Modal(document.getElementById('touristDetailsModal'));
+        const modalBody = document.getElementById('modalBody');
+        modal.show();
+
+        fetch(`/api/admin/tourist/${id}/details`)
+            .then(response => response.json())
+            .then(data => {
+                modalBody.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>${_t('modal_lbl_name')}</strong> ${data.name}</p>
+                            <p><strong>${_t('modal_lbl_digital_id')}</strong> ${data.digital_id}</p>
+                            <p><strong>${_t('modal_lbl_nationality')}</strong> ${data.nationality}</p>
+                            <p><strong>${_t('modal_lbl_contact')}</strong> ${data.contact}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>${_t('modal_lbl_safety')}</strong> ${data.safety_score}%</p>
+                            <p><strong>${_t('modal_lbl_status')}</strong> ${data.status}</p>
+                            <p><strong>${_t('modal_lbl_last_location')}</strong> ${data.last_location}</p>
+                            <p><strong>${_t('lbl_hotel')}</strong> ${data.hotel_name}</p>
+                        </div>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                modalBody.innerHTML = `<div class="alert alert-danger">${_t('modal_error')}</div>`;
+            });
+    }
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_KEY }}&callback=initPoliceMap" async defer></script>
+{% endblock %}

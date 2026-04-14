@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Smart Tourist Shield AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-page {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .login-page::before {
+        content: '';
+        position: absolute;
+        width: 500px;
+        height: 500px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        top: -250px;
+        right: -250px;
+    }
+
+    .login-page::after {
+        content: '';
+        position: absolute;
+        width: 400px;
+        height: 400px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        bottom: -200px;
+        left: -200px;
+    }
+
+    .login-container {
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(20px);
+        border-radius: 24px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 1000px;
+        width: 100%;
+        overflow: hidden;
+        z-index: 10;
+    }
+
+    .login-header {
+        text-align: center;
+        padding: 3rem 2rem 2rem;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+    }
+
+    .login-brand-icon {
+        font-size: 4rem;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 1rem;
+    }
+
+    .login-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+    }
+
+    .login-subtitle {
+        color: #6b7280;
+        font-size: 1.1rem;
+    }
+
+    .role-selection {
+        padding: 2rem 3rem;
+    }
+
+    .section-title {
+        text-align: center;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 2rem;
+    }
+
+    .role-cards-container {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    @media (max-width: 768px) {
+        .role-cards-container {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .role-card {
+        background: white;
+        border: 3px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 2rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .role-card:hover {
+        transform: translateY(-8px);
+        border-color: #667eea;
+        box-shadow: 0 12px 24px rgba(102, 126, 234, 0.2);
+    }
+
+    .role-card.active {
+        border-color: #667eea;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+    }
+
+    .role-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        transition: transform 0.3s ease;
+    }
+
+    .role-card:hover .role-icon {
+        transform: scale(1.1);
+    }
+
+    .role-card.tourist .role-icon {
+        color: #10b981;
+    }
+
+    .role-card.police .role-icon {
+        color: #3b82f6;
+    }
+
+    .role-card.admin .role-icon {
+        color: #ef4444;
+    }
+
+    .role-name {
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+    }
+
+    .role-credentials {
+        font-size: 0.875rem;
+        color: #6b7280;
+        line-height: 1.6;
+    }
+
+    .login-form-section {
+        padding: 0 3rem 3rem;
+    }
+
+    .form-control {
+        height: 50px;
+        border-radius: 12px;
+        border: 2px solid #e5e7eb;
+        padding: 0 1rem;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .input-group-text {
+        background: #f3f4f6;
+        border: 2px solid #e5e7eb;
+        border-right: none;
+        border-radius: 12px 0 0 12px;
+    }
+
+    .input-group .form-control {
+        border-left: none;
+        border-radius: 0 12px 12px 0;
+    }
+
+    .btn-login {
+        height: 55px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border: none;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: white;
+        transition: all 0.3s;
+    }
+
+    .btn-login:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .back-link:hover {
+        gap: 0.75rem;
+        color: #764ba2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-page">
+    <div class="login-container">
+        <!-- Header -->
+        <div class="login-header">
+            <div class="login-brand-icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h1 class="login-title" data-i18n="login_app_title">Smart Tourist Shield AI</h1>
+            <p class="login-subtitle" data-i18n="login_app_subtitle">AI-Powered Safety Monitoring &amp; Emergency
+                Response System</p>
+        </div>
+
+        <!-- Role Selection -->
+        <div class="role-selection">
+            <h2 class="section-title" data-i18n="login_select_role">Select Your Role to Continue</h2>
+
+            <div class="role-cards-container">
+                <!-- Tourist Card -->
+                <div class="role-card tourist" onclick="selectRole('tourist', 'tourist@123', this)">
+                    <div class="role-icon">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <span class="role-name" data-i18n="login_tourist">Tourist</span>
+                    <div class="role-credentials">
+                        <strong data-i18n="login_cred_user">Username:</strong> tourist<br>
+                        <strong data-i18n="login_cred_pass">Password:</strong> tourist@123
+                    </div>
+                </div>
+
+                <!-- Police Card -->
+                <div class="role-card police" onclick="selectRole('police', 'police@123', this)">
+                    <div class="role-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <span class="role-name" data-i18n="login_police">Police</span>
+                    <div class="role-credentials">
+                        <strong data-i18n="login_cred_user">Username:</strong> police<br>
+                        <strong data-i18n="login_cred_pass">Password:</strong> police@123
+                    </div>
+                </div>
+
+                <!-- Admin Card -->
+                <div class="role-card admin" onclick="selectRole('admin', 'admin@123', this)">
+                    <div class="role-icon">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <span class="role-name" data-i18n="login_admin">Admin</span>
+                    <div class="role-credentials">
+                        <strong data-i18n="login_cred_user">Username:</strong> admin<br>
+                        <strong data-i18n="login_cred_pass">Password:</strong> admin@123
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Form -->
+        <div class="login-form-section">
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="mb-3">
+                    <label class="form-label fw-bold" data-i18n="login_username_label">Username or Email</label>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-user"></i>
+                        </span>
+                        <input type="text" class="form-control" id="username" name="username"
+                            data-i18n-placeholder="login_username_ph" placeholder="Enter your username" required>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold" data-i18n="login_password_label">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-lock"></i>
+                        </span>
+                        <input type="password" class="form-control" id="password" name="password"
+                            data-i18n-placeholder="login_password_ph" placeholder="Enter your password" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-login w-100 mb-3">
+                    <i class="fas fa-sign-in-alt me-2"></i><span data-i18n="login_btn">Secure Login</span>
+                </button>
+
+                <div class="text-center">
+                    <a href="{{ url_for('landing') }}" class="back-link">
+                        <i class="fas fa-arrow-left"></i>
+                        <span data-i18n="login_back">Back to Home</span>
+                    </a>
+                </div>
+                <div class="text-center mt-3">
+                    <span class="text-muted" style="font-size:0.9rem;">New tourist? </span>
+                    <a href="{{ url_for('signup') }}" style="color:#667eea;font-weight:700;font-size:0.9rem;">Register
+                        here →</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function selectRole(username, password, element) {
+        // Remove active class from all cards
+        document.querySelectorAll('.role-card').forEach(card => {
+            card.classList.remove('active');
+        });
+
+        // Add active class to selected card
+        element.classList.add('active');
+
+        // Fill form
+        document.getElementById('username').value = username;
+        document.getElementById('password').value = password;
+
+        // Smooth scroll to form
+        document.querySelector('.login-form-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+</script>
+{% endblock %}

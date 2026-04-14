@@ -1,0 +1,950 @@
+{% extends "base.html" %}
+
+{% block title %}Tourist Dashboard - Smart Tourist Shield AI{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ambulance_styles.css') }}">
+<style>
+    body {
+        background: var(--bg-light);
+    }
+
+    /* Notification Bell */
+    .notif-bell-btn {
+        position: relative;
+        background: none;
+        border: 2px solid #e5e7eb;
+        border-radius: 10px;
+        width: 42px;
+        height: 42px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: #6b7280;
+        transition: all 0.25s;
+    }
+
+    .notif-bell-btn:hover {
+        border-color: #667eea;
+        color: #667eea;
+        background: rgba(102, 126, 234, 0.06);
+    }
+
+    .notif-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #ef4444;
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 4px;
+        border: 2px solid white;
+        animation: notif-pulse 2s infinite;
+    }
+
+    @keyframes notif-pulse {
+
+        0%,
+        100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.15);
+        }
+    }
+
+    /* Notification dropdown */
+    .notif-panel {
+        position: fixed;
+        top: 70px;
+        right: 1.5rem;
+        width: 340px;
+        max-height: 440px;
+        background: white;
+        border-radius: 18px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+        z-index: 9999;
+        display: none;
+        overflow: hidden;
+        border: 1px solid #f0f0f0;
+    }
+
+    .notif-panel.open {
+        display: flex;
+        flex-direction: column;
+        animation: fadeSlideDown 0.25s ease;
+    }
+
+    @keyframes fadeSlideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .notif-header {
+        padding: 1rem 1.25rem 0.75rem;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .notif-header h6 {
+        font-weight: 800;
+        color: #1f2937;
+        margin: 0;
+    }
+
+    .notif-items {
+        overflow-y: auto;
+        max-height: 340px;
+    }
+
+    .notif-item {
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid #f9fafb;
+        transition: background 0.2s;
+    }
+
+    .notif-item:hover {
+        background: #fafafa;
+    }
+
+    .notif-item.unread {
+        border-left: 3px solid #667eea;
+        background: rgba(102, 126, 234, 0.03);
+    }
+
+    .notif-item-title {
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: #1f2937;
+    }
+
+    .notif-item-msg {
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-top: 0.2rem;
+        line-height: 1.4;
+    }
+
+    .notif-item-time {
+        font-size: 0.7rem;
+        color: #9ca3af;
+        margin-top: 0.25rem;
+    }
+
+    /* Route card */
+    .route-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 18px;
+        padding: 1.5rem;
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .route-card::after {
+        content: '';
+        position: absolute;
+        width: 200px;
+        height: 200px;
+        background: rgba(255, 255, 255, 0.07);
+        border-radius: 50%;
+        top: -80px;
+        right: -60px;
+    }
+
+    .route-arrow {
+        font-size: 1.5rem;
+        opacity: 0.8;
+    }
+
+    .route-location {
+        font-size: 1.3rem;
+        font-weight: 800;
+    }
+
+    .route-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        opacity: 0.75;
+    }
+
+    .zone-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 1rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .zone-badge.safe {
+        background: rgba(16, 185, 129, 0.15);
+        color: #065f46;
+    }
+
+    .zone-badge.out_of_zone {
+        background: rgba(239, 68, 68, 0.15);
+        color: #991b1b;
+    }
+
+    .zone-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        animation: blink 1.5s infinite;
+    }
+
+    .zone-dot.safe {
+        background: #10b981;
+    }
+
+    .zone-dot.out_of_zone {
+        background: #ef4444;
+    }
+
+    @keyframes blink {
+
+        0%,
+        100% {
+            opacity: 1
+        }
+
+        50% {
+            opacity: 0.4
+        }
+    }
+
+    /* Recommendation card */
+    .rec-card {
+        background: white;
+        border: 1px solid #f0f0f0;
+        border-radius: 14px;
+        padding: 1rem 1.25rem;
+        transition: all 0.25s;
+        cursor: pointer;
+    }
+
+    .rec-card:hover {
+        border-color: #667eea;
+        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.12);
+        transform: translateY(-2px);
+    }
+
+    .rec-route {
+        font-weight: 800;
+        color: #1f2937;
+        font-size: 0.95rem;
+    }
+
+    .rec-highlight {
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    .rec-meta span {
+        font-size: 0.72rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Mobile Overlay -->
+<div class="mobile-overlay"></div>
+
+<!-- Dashboard Wrapper -->
+<div class="dashboard-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-shield-alt" style="font-size: 2rem; color: var(--primary);"></i>
+            <div>
+                <div class="sidebar-brand" data-i18n="brand_shield">Shield AI</div>
+                <small class="text-muted" data-i18n="portal_tourist">Tourist Portal</small>
+            </div>
+        </div>
+
+        <ul class="sidebar-menu">
+            <li class="menu-item">
+                <a href="#" class="menu-link active">
+                    <i class="fas fa-home menu-icon"></i>
+                    <span data-i18n="menu_dashboard">Dashboard</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#safety" class="menu-link">
+                    <i class="fas fa-shield-alt menu-icon"></i>
+                    <span data-i18n="menu_safety">Safety Score</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#alerts" class="menu-link">
+                    <i class="fas fa-bell menu-icon"></i>
+                    <span data-i18n="menu_live_alerts">Live Alerts</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#map" class="menu-link">
+                    <i class="fas fa-map-marked-alt menu-icon"></i>
+                    <span data-i18n="menu_route">Route Tracking</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#sos" class="menu-link">
+                    <i class="fas fa-exclamation-triangle menu-icon"></i>
+                    <span data-i18n="menu_panic">Panic SOS</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#pdf" class="menu-link">
+                    <i class="fas fa-file-pdf menu-icon"></i>
+                    <span data-i18n="menu_pdf">PDF Reports</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="user-profile">
+            <div class="user-avatar">{{ profile.name[0] }}</div>
+            <div class="user-info">
+                <div class="user-name">{{ profile.name }}</div>
+                <div class="user-role">{{ profile.digital_id }}</div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1">Welcome, {{ profile.name }}</h2>
+                <p class="text-muted mb-0" data-i18n="tourist_welcome">Your AI guardian is watching over you</p>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <!-- Zone Status Badge -->
+                <div class="zone-badge {{ profile.zone_status or 'safe' }}">
+                    <div class="zone-dot {{ profile.zone_status or 'safe' }}"></div>
+                    {% if profile.zone_status == 'out_of_zone' %}
+                    🔴 Out of Zone
+                    {% else %}
+                    🟢 Safe Zone
+                    {% endif %}
+                </div>
+                <!-- Notification Bell -->
+                <button class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifications()" title="Notifications">
+                    🔔
+                    {% if unread_count and unread_count > 0 %}
+                    <div class="notif-badge" id="notifBadge">{{ unread_count }}</div>
+                    {% else %}
+                    <div class="notif-badge" id="notifBadge" style="display:none">0</div>
+                    {% endif %}
+                </button>
+                <div class="badge bg-success px-3 py-2">
+                    <i class="fas fa-circle" style="font-size: 0.5rem;"></i> <span
+                        data-i18n="online_badge">Online</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Panel -->
+        <div class="notif-panel" id="notifPanel">
+            <div class="notif-header">
+                <h6>🔔 Notifications</h6>
+                <button onclick="markAllRead()"
+                    style="background:none;border:none;color:#667eea;font-size:0.78rem;font-weight:700;cursor:pointer;">Mark
+                    all read</button>
+            </div>
+            <div class="notif-items" id="notifItems">
+                <div style="padding:2rem;text-align:center;color:#9ca3af;font-size:0.85rem;">
+                    <i class="fas fa-bell-slash" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>
+                    Loading notifications...
+                </div>
+            </div>
+        </div>
+
+        <!-- Route Info Card + Tour Details -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-8">
+                <div class="route-card">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <div class="route-label">Your Registered Tour Route</div>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                <span class="badge" style="background:rgba(255,255,255,0.25);font-size:0.7rem;">
+                                    {{ profile.tourist_type or 'TOURIST' }}
+                                </span>
+                                <span class="badge" style="background:rgba(255,255,255,0.2);font-size:0.7rem;">
+                                    {{ profile.digital_id }}
+                                </span>
+                            </div>
+                        </div>
+                        <i class="fas fa-route" style="font-size:2rem;opacity:0.7;"></i>
+                    </div>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div>
+                            <div class="route-label">FROM</div>
+                            <div class="route-location">{{ profile.from_location or 'Not Set' }}</div>
+                        </div>
+                        <div class="route-arrow">→</div>
+                        <div>
+                            <div class="route-label">TO</div>
+                            <div class="route-location">{{ profile.to_location or 'Not Set' }}</div>
+                        </div>
+                    </div>
+                    {% if profile.tour_start_date or profile.tour_end_date %}
+                    <div class="mt-3" style="opacity:0.85;font-size:0.85rem;">
+                        <i class="fas fa-calendar-alt me-1"></i>
+                        {% if profile.tour_start_date %}{{ profile.tour_start_date.strftime('%d %b %Y') }}{% endif %}
+                        {% if profile.tour_end_date %} → {{ profile.tour_end_date.strftime('%d %b %Y') }}{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="glass-card p-4 h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <h6 class="fw-bold mb-3"><i class="fas fa-map-pin text-primary me-2"></i>Zone Status</h6>
+                        <div class="zone-badge {{ profile.zone_status or 'safe' }} mb-3" style="width:fit-content">
+                            <div class="zone-dot {{ profile.zone_status or 'safe' }}"></div>
+                            {% if profile.zone_status == 'out_of_zone' %}
+                            🔴 <strong>Outside Geo-Fence</strong>
+                            {% else %}
+                            🟢 <strong>Inside Safe Zone</strong>
+                            {% endif %}
+                        </div>
+                        <div class="text-muted" style="font-size:0.82rem;">Current: <strong>{{ profile.last_location
+                                }}</strong></div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="text-muted mb-1" style="font-size:0.78rem;">Safety Score</div>
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;">
+                                <div
+                                    style="width:{{ safety_score }}%;height:100%;background:{% if safety_score >= 80 %}#10b981{% elif safety_score >= 60 %}#f59e0b{% else %}#ef4444{% endif %};border-radius:3px;">
+                                </div>
+                            </div>
+                            <strong>{{ safety_score }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Safety Score Section -->
+        <div id="safety" class="row g-4 mb-4">
+            <div class="col-lg-4">
+                <div class="glass-card text-center p-4">
+                    <h5 class="mb-4">
+                        <i class="fas fa-shield-alt text-primary me-2"></i>
+                        <span data-i18n="live_safety_score">Live Safety Score</span>
+                    </h5>
+                    <div class="safety-score-ring mx-auto mb-3">
+                        <div class="safety-score-inner">
+                            <div class="safety-score-value" id="safetyScore">{{ safety_score }}</div>
+                            <small class="text-muted text-uppercase" data-i18n="score_label">Score</small>
+                        </div>
+                    </div>
+                    <span class="badge badge-custom bg-{{ badge_color }}" id="statusBadge">{{ risk_badge }}</span>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-map-pin me-1"></i>
+                            <span id="currentLocation">{{ profile.last_location }}</span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4">
+                        <i class="fas fa-chart-line text-primary me-2"></i>
+                        <span data-i18n="safety_metrics">Safety Metrics</span>
+                    </h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="stat-card">
+                                <div class="stat-icon bg-success">
+                                    <i class="fas fa-check"></i>
+                                </div>
+                                <div class="stat-value">{{ alerts|length }}</div>
+                                <div class="stat-label" data-i18n="stat_total_alerts">Total Alerts</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card">
+                                <div class="stat-icon bg-warning">
+                                    <i class="fas fa-flag"></i>
+                                </div>
+                                <div class="stat-value">{{ behavior_flags|length }}</div>
+                                <div class="stat-label" data-i18n="stat_risk_flags">Risk Flags</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card">
+                                <div class="stat-icon bg-info">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="stat-value">24h</div>
+                                <div class="stat-label" data-i18n="stat_monitoring">Monitoring</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Alerts Section -->
+        <div id="alerts" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bell text-warning me-2"></i>
+                            <span data-i18n="live_ai_alerts">Live AI Alerts</span>
+                        </h5>
+                        <span class="badge bg-danger" data-i18n="auto_refresh">Auto-Refresh</span>
+                    </div>
+                    <div id="alertsContainer" style="max-height: 400px; overflow-y: auto;">
+                        {% for alert in alerts %}
+                        <div class="alert-item severity-{{ alert.severity }}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold mb-1">{{ alert.message }}</div>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>{{ alert.created_at.strftime('%H:%M:%S') }}
+                                    </small>
+                                </div>
+                                <span
+                                    class="badge bg-{{ 'dark' if alert.severity == 'critical' else ('danger' if alert.severity == 'high' else ('warning' if alert.severity == 'medium' else 'info')) }} ms-2">
+                                    {{ alert.severity.upper() }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Section -->
+        <div id="map" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4">
+                        <i class="fas fa-map-marked-alt text-primary me-2"></i>
+                        <span data-i18n="live_gps">Live GPS Tracking</span>
+                    </h5>
+                    <div id="touristMap" class="map-container"></div>
+
+                    <!-- GPS Status Bar — auto-requests location on load like Google Maps -->
+                    <div id="gpsStatusBar" class="mt-2 px-3 py-2 rounded-3"
+                        style="background:rgba(59,130,246,0.1);border:1px solid #3b82f6;transition:all 0.4s;">
+                        <div class="d-flex align-items-center gap-2">
+                            <span id="gpsStatusIcon"><i class="fas fa-spinner fa-spin text-primary"></i></span>
+                            <span id="gpsStatusText" class="small fw-medium flex-grow-1">
+                                <span class="text-primary fw-semibold">Acquiring GPS…</span>
+                                <small class="text-muted ms-2">Please allow location when browser asks</small>
+                            </span>
+                            <!-- Button hidden by default, shown only if blocked/error -->
+                            <button id="enableGPSBtn" onclick="enableLiveTracking()"
+                                class="btn btn-sm btn-outline-danger d-none d-inline-flex align-items-center gap-1"
+                                style="font-size:0.82rem;padding:0.3rem 0.85rem;border-radius:8px;white-space:nowrap;">
+                                <i class="fas fa-redo"></i> Retry
+                            </button>
+                        </div>
+
+                        <!-- Step-by-step instructions shown ONLY when Chrome has previously blocked location -->
+                        <div id="gpsBlockedInstructions" class="mt-2 p-3 rounded-2"
+                            style="display:none;background:rgba(239,68,68,0.06);border:1px solid #fca5a5;">
+                            <p class="mb-2 small fw-bold text-danger">
+                                <i class="fas fa-lock me-1"></i>
+                                You previously denied location — follow these steps to reset:
+                            </p>
+                            <ol class="mb-2 small text-dark ps-3" style="line-height:1.9;">
+                                <li>Click the <strong>🔒 lock / info icon</strong> in the browser address bar</li>
+                                <li>Click <strong>"Site settings"</strong></li>
+                                <li>Find <strong>Location</strong> → set to <strong>Allow</strong></li>
+                                <li><strong>Reload this page</strong> — GPS will start automatically</li>
+                            </ol>
+                            <button onclick="window.location.reload()" class="btn btn-sm btn-danger">
+                                <i class="fas fa-sync me-1"></i> Reload Page
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex gap-3 flex-wrap">
+                        <small><span class="badge bg-success"></span> <span data-i18n="safe_zones">Safe
+                                Zones</span></small>
+                        <small><span class="badge bg-danger"></span> <span data-i18n="high_risk_zones">High Risk
+                                Zones</span></small>
+                        <small><span class="badge bg-primary"></span> <span data-i18n="your_location">Your
+                                Location</span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panic SOS Section - DUAL EMERGENCY RESPONSE -->
+        <div id="sos" class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="glass-card p-4" style="border: 2px solid var(--danger);">
+                    <h5 class="text-danger mb-3">
+                        <i class="fas fa-police-box me-2"></i>
+                        <span data-i18n="police_emergency">Police Emergency</span>
+                    </h5>
+                    <p class="mb-4" data-i18n="police_sos_desc">Instantly alert police units with your exact GPS
+                        coordinates</p>
+                    <button id="policeSOSButton" class="btn w-100"
+                        style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 700; font-size: 1.1rem; padding: 1rem; border-radius: 12px; border: none;">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        <span data-i18n="btn_police_sos">POLICE SOS</span>
+                    </button>
+                    <div class="mt-3 p-3" style="background: rgba(239, 68, 68, 0.05); border-radius: 0.5rem;">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <small class="text-muted d-block" data-i18n="nearest_unit">Nearest Unit</small>
+                                <strong>450m away</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block" data-i18n="response_time">Response Time</small>
+                                <strong class="text-success">~2 mins</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="glass-card p-4" style="border: 2px solid #3b82f6;">
+                    <h5 style="color: #3b82f6;" class="mb-3">
+                        <i class="fas fa-ambulance me-2"></i>
+                        <span data-i18n="medical_emergency">Medical Emergency</span>
+                    </h5>
+                    <p class="mb-3"><small data-i18n="medical_sos_desc">Request immediate ambulance with your exact GPS
+                            coordinates</small></p>
+
+                    <!-- Ambulance Buttons Row -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <button id="hospitalSOSButton" class="btn btn-primary w-100"
+                                style="background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; font-weight: 600; padding: 0.75rem;">
+                                <i class="fas fa-hospital me-1"></i>
+                                <span data-i18n="btn_ambulance_sos">AMBULANCE SOS</span>
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button class="btn btn-outline-primary w-100" onclick="openAmbulanceTracking()"
+                                id="trackAmbulanceBtn" style="display: none; font-weight: 600; padding: 0.75rem;">
+                                <i class="fas fa-map-marked-alt me-1"></i>
+                                <span data-i18n="btn_track">TRACK</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-3" style="background: rgba(59, 130, 246, 0.05); border-radius: 0.5rem;">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <small class="text-muted d-block" data-i18n="nearest_hospital">Nearest Hospital</small>
+                                <strong>1.2km away</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block" data-i18n="response_time">Response Time</small>
+                                <strong class="text-success">~3 mins</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Digital ID Card Section -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="glass-card p-4">
+                    <h5 class="mb-3">
+                        <i class="fas fa-id-card text-primary me-2"></i>
+                        <span data-i18n="digital_id_card">Digital ID Card</span>
+                    </h5>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <small class="text-muted" data-i18n="lbl_passport_id">Passport</small>
+                            <div class="fw-bold">{{ profile.passport_number }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted" data-i18n="lbl_nationality">Nationality</small>
+                            <div class="fw-bold">{{ profile.nationality }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted" data-i18n="lbl_hotel">Hotel</small>
+                            <div class="fw-bold">{{ profile.hotel_name }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted" data-i18n="lbl_emergency">Emergency</small>
+                            <div class="fw-bold text-danger">{{ profile.emergency_contact }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="glass-card p-4">
+                    <h5 class="mb-3">
+                        <i class="fas fa-info-circle text-warning me-2"></i>
+                        <span data-i18n="emergency_instr">Emergency Instructions</span>
+                    </h5>
+                    <ul style="font-size: 0.9rem;">
+                        <li class="mb-2" data-i18n="instr_police"><strong>Police SOS:</strong> For crime, theft,
+                            assault, or immediate danger</li>
+                        <li class="mb-2" data-i18n="instr_ambulance"><strong>Ambulance SOS:</strong> For medical
+                            emergencies, injuries, or health issues</li>
+                        <li class="mb-2" data-i18n="instr_both"><strong>Both buttons</strong> instantly broadcast your
+                            GPS location</li>
+                        <li data-i18n="instr_24_7"><strong>24/7 monitoring</strong> by AI and authorities</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Route Recommendations -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="fas fa-map-signs text-info me-2"></i>🤖 Route Recommendations</h5>
+                        <span class="badge bg-info">Basic Mode</span>
+                    </div>
+                    <div class="row g-3" id="recRoutes">
+                        <div class="col-12 text-center text-muted py-3">
+                            <i class="fas fa-spinner fa-spin"></i> Loading recommendations...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Downloads Section -->
+        <div id="pdf" class="row g-4 mb-4">
+            <div class="col-12">
+                <h5 class="mb-3">
+                    <i class="fas fa-file-pdf text-danger me-2"></i>
+                    <span data-i18n="pdf_reports">PDF Reports &amp; Downloads</span>
+                </h5>
+            </div>
+
+            <div class="col-md-4">
+                <div class="pdf-download-card">
+                    <div class="pdf-icon">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2" data-i18n="pdf_safety">Safety Report</h6>
+                    <p class="small text-muted mb-3" data-i18n="pdf_safety_desc">Your profile, score, and recent alerts
+                    </p>
+                    <a href="{{ url_for('tourist_pdf_safety_report') }}" class="btn btn-gradient w-100">
+                        <i class="fas fa-download me-2"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="pdf-download-card">
+                    <div class="pdf-icon">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2" data-i18n="pdf_alert_hist">Alert History</h6>
+                    <p class="small text-muted mb-3" data-i18n="pdf_alert_hist_desc">Complete log of all AI alerts</p>
+                    <a href="{{ url_for('tourist_pdf_alert_history') }}" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-download me-2"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="pdf-download-card">
+                    <div class="pdf-icon">
+                        <i class="fas fa-id-card"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2" data-i18n="pdf_digital_id">Digital ID Card</h6>
+                    <p class="small text-muted mb-3" data-i18n="pdf_digital_id_desc">Official tourist ID document</p>
+                    <a href="{{ url_for('tourist_pdf_digital_id') }}" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-download me-2"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Panic Confirmation Modal -->
+<div class="modal fade" id="panicModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span data-i18n="modal_emergency">EMERGENCY ALERT</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <i class="fas fa-exclamation-circle text-danger" style="font-size: 4rem; margin-bottom: 1rem;"></i>
+                <h5 class="fw-bold mb-3" data-i18n="modal_danger_q">Are you in IMMEDIATE DANGER?</h5>
+                <p class="mb-4" data-i18n="modal_danger_desc">This will broadcast your location to all nearby police
+                    units and emergency services.</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <span data-i18n="modal_warning">Only activate if you need urgent help</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
+                    data-i18n="btn_cancel">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmPanic">
+                    <i class="fas fa-broadcast-tower me-2"></i>
+                    <span data-i18n="btn_send_sos">YES, SEND SOS NOW</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sidebar Toggle (Mobile) -->
+<button id="sidebarToggle" class="sidebar-toggle">
+    <i class="fas fa-bars"></i>
+</button>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const GEO_FENCES = {{ geo_fences_json | safe }};
+</script>
+<script src="{{ url_for('static', filename='js/tourist.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ambulance_tracking.js') }}"></script>
+<script>
+    // ============ NOTIFICATIONS ============
+    let notifOpen = false;
+
+    function toggleNotifications() {
+        const panel = document.getElementById('notifPanel');
+        notifOpen = !notifOpen;
+        panel.classList.toggle('open', notifOpen);
+        if (notifOpen) loadNotifications();
+    }
+
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('#notifBellBtn') && !e.target.closest('#notifPanel')) {
+            document.getElementById('notifPanel').classList.remove('open');
+            notifOpen = false;
+        }
+    });
+
+    function loadNotifications() {
+        fetch('/api/notifications')
+            .then(r => r.json())
+            .then(data => {
+                const container = document.getElementById('notifItems');
+                if (!data.length) {
+                    container.innerHTML = '<div style="padding:2rem;text-align:center;color:#9ca3af;font-size:0.85rem;"><i class="fas fa-bell-slash" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>No notifications</div>';
+                    return;
+                }
+                container.innerHTML = data.map(n => `
+                    <div class="notif-item ${n.is_read ? '' : 'unread'}">
+                        <div class="notif-item-title">${n.title}</div>
+                        <div class="notif-item-msg">${n.message}</div>
+                        <div class="notif-item-time">${n.time}</div>
+                    </div>
+                `).join('');
+            });
+    }
+
+    function markAllRead() {
+        fetch('/api/notifications/mark-read', { method: 'POST' })
+            .then(() => {
+                document.getElementById('notifBadge').style.display = 'none';
+                document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+            });
+    }
+
+    // ============ ROUTE RECOMMENDATIONS ============
+    function loadRecommendations() {
+        fetch('/api/route-recommendations')
+            .then(r => r.json())
+            .then(data => {
+                const container = document.getElementById('recRoutes');
+                const safety_colors = { 'High': 'success', 'Moderate': 'warning', 'Low': 'danger' };
+                container.innerHTML = data.routes.map(r => `
+                    <div class="col-md-4 col-sm-6">
+                        <div class="rec-card">
+                            <div class="rec-route">📍 ${r.from} → ${r.to}</div>
+                            <div class="rec-highlight">${r.highlight}</div>
+                            <div class="rec-meta d-flex gap-2 mt-2 flex-wrap">
+                                <span class="bg-light text-muted">${r.distance}</span>
+                                <span class="bg-light text-muted">${r.duration}</span>
+                                <span class="bg-${safety_colors[r.safety] || 'info'}-light text-${safety_colors[r.safety] || 'info'}" style="background:rgba(0,0,0,0.04)!important;">Safety: ${r.safety}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            });
+    }
+
+    loadRecommendations();
+
+    // ============ ZONE CHECK (every 30s) — uses live GPS if available ============
+    setInterval(() => {
+        const lat = window._liveGPSLat;
+        const lng = window._liveGPSLng;
+        const url = (lat && lng)
+            ? `/api/tourist/zone-check?lat=${lat}&lng=${lng}`
+            : '/api/tourist/zone-check';
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                const badges = document.querySelectorAll('.zone-badge');
+                badges.forEach(badge => {
+                    badge.className = 'zone-badge ' + data.zone_status;
+                    badge.innerHTML = data.zone_status === 'safe'
+                        ? '<div class="zone-dot safe"></div>🟢 Safe Zone'
+                        : '<div class="zone-dot out_of_zone"></div>🔴 Out of Zone';
+                });
+                // Update unread badge
+                fetch('/api/notifications/unread-count')
+                    .then(r => r.json())
+                    .then(d => {
+                        const badge = document.getElementById('notifBadge');
+                        if (d.count > 0) {
+                            badge.style.display = 'flex';
+                            badge.textContent = d.count;
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    });
+            });
+    }, 30000);
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_KEY }}&libraries=geometry,places&callback=initMap" async defer></script>
+{% endblock %}

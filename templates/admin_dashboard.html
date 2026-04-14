@@ -1,0 +1,965 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Command Center - Smart Tourist Shield AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background: var(--bg-light);
+    }
+
+    /* Geo-Fence Panel */
+    .geo-fence-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: #f9fafb;
+        border-radius: 12px;
+        margin-bottom: 0.6rem;
+        border: 1px solid #f0f0f0;
+    }
+
+    .geo-fence-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .geo-fence-name {
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: #1f2937;
+    }
+
+    .geo-fence-meta {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    /* Zone status in route table */
+    .zone-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.7rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .zone-pill.safe {
+        background: rgba(16, 185, 129, 0.12);
+        color: #065f46;
+    }
+
+    .zone-pill.out_of_zone {
+        background: rgba(239, 68, 68, 0.12);
+        color: #991b1b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Mobile Overlay -->
+<div class="mobile-overlay"></div>
+
+<!-- Dashboard Wrapper -->
+<div class="dashboard-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-shield-alt" style="font-size: 2rem; color: var(--danger);"></i>
+            <div>
+                <div class="sidebar-brand" data-i18n="brand_command">Command Center</div>
+                <small class="text-muted" data-i18n="portal_admin">Admin Portal</small>
+            </div>
+        </div>
+
+        <ul class="sidebar-menu">
+            <li class="menu-item">
+                <a href="#" class="menu-link active">
+                    <i class="fas fa-tachometer-alt menu-icon"></i>
+                    <span data-i18n="menu_overview">Overview</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#tourists" class="menu-link">
+                    <i class="fas fa-users menu-icon"></i>
+                    <span data-i18n="menu_live_tourists">Live Tourists</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#create-tourist" class="menu-link">
+                    <i class="fas fa-id-card menu-icon"></i>
+                    <span data-i18n="menu_tourist_id">Tourist ID Creation</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#geo-fence" class="menu-link">
+                    <i class="fas fa-draw-polygon menu-icon"></i>
+                    <span>Geo-Fence Manager</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#active-routes" class="menu-link">
+                    <i class="fas fa-route menu-icon"></i>
+                    <span>Active Routes</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#map" class="menu-link">
+                    <i class="fas fa-map-marked-alt menu-icon"></i>
+                    <span data-i18n="menu_map">Map View</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#alerts" class="menu-link">
+                    <i class="fas fa-bell menu-icon"></i>
+                    <span data-i18n="menu_alerts">Alerts Center</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#sos" class="menu-link">
+                    <i class="fas fa-exclamation-triangle menu-icon"></i>
+                    <span data-i18n="menu_sos">SOS Dispatch</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#pdf" class="menu-link">
+                    <i class="fas fa-file-pdf menu-icon"></i>
+                    <span data-i18n="menu_reports">Reports</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="user-profile">
+            <div class="user-avatar" style="background: linear-gradient(135deg, var(--danger), #dc2626);">A</div>
+            <div class="user-info">
+                <div class="user-name">{{ current_user.username }}</div>
+                <div class="user-role" data-i18n="role_admin">Administrator</div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1" data-i18n="admin_header">Command Center Dashboard</h2>
+                <p class="text-muted mb-0" data-i18n="admin_subheader">Real-time monitoring &amp; incident management
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <div class="badge bg-success px-3 py-2">
+                    <i class="fas fa-circle" style="font-size: 0.5rem;"></i> <span data-i18n="admin_ai_online">AI Engine
+                        Online</span>
+                </div>
+                <button class="btn btn-outline-primary btn-sm" onclick="location.reload()">
+                    <i class="fas fa-sync-alt"></i> <span data-i18n="btn_refresh">Refresh</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-primary">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-value">{{ stats.total_tourists }}</div>
+                    <div class="stat-label" data-i18n="stat_total_tourists">Total Tourists</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-success">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <div class="stat-value">{{ stats.active_tourists }}</div>
+                    <div class="stat-label" data-i18n="stat_active_now">Active Now</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-info">
+                        <i class="fas fa-route"></i>
+                    </div>
+                    <div class="stat-value">{{ stats.active_routes }}</div>
+                    <div class="stat-label">Active Routes</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon bg-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-value">{{ stats.critical_alerts }}</div>
+                    <div class="stat-label" data-i18n="stat_critical">Critical</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Geo-Fence Manager -->
+        <div id="geo-fence" class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="glass-card p-4">
+                    <h5 class="mb-3">
+                        <i class="fas fa-draw-polygon text-success me-2"></i>Geo-Fence Manager
+                        <span class="badge bg-success ms-2">{{ geo_fences|length }} zones</span>
+                    </h5>
+                    <!-- Add New Zone Form -->
+                    <div style="background:#f9fafb;border-radius:14px;padding:1.25rem;margin-bottom:1rem;">
+                        <div class="fw-bold mb-2" style="font-size:0.85rem;">➕ Add New Geo-Fence Zone</div>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" id="gf_name"
+                                    placeholder="Zone Name*">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-control form-control-sm" id="gf_type">
+                                    <option value="safe">🟢 Safe Zone</option>
+                                    <option value="restricted">🔴 Restricted</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" class="form-control form-control-sm" id="gf_lat" placeholder="Lat"
+                                    step="0.0001">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" class="form-control form-control-sm" id="gf_lng" placeholder="Lng"
+                                    step="0.0001">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" class="form-control form-control-sm" id="gf_radius"
+                                    placeholder="Radius km" step="0.1" value="1">
+                            </div>
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" id="gf_desc"
+                                    placeholder="Description (optional)">
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-success btn-sm w-100" onclick="addGeoFence()">
+                                    <i class="fas fa-plus"></i> Add Zone
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted">💡 Click on the map to auto-fill coordinates</small>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Zone List -->
+                    <div style="max-height:280px;overflow-y:auto;" id="geoFenceList">
+                        {% for fence in geo_fences %}
+                        <div class="geo-fence-item" id="gf-item-{{ fence.id }}">
+                            <div class="geo-fence-dot" style="background:{{ fence.color }};"></div>
+                            <div class="flex-grow-1">
+                                <div class="geo-fence-name">{{ fence.name }}</div>
+                                <div class="geo-fence-meta">
+                                    {{ fence.zone_type.upper() }} · {{ fence.radius_km }} km radius · ({{
+                                    '%.4f'|format(fence.center_lat) }}, {{ '%.4f'|format(fence.center_lng) }})
+                                    {% if not fence.is_active %}<span class="badge bg-secondary ms-1">Disabled</span>{%
+                                    endif %}
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleFence({{ fence.id }})"
+                                title="Toggle">
+                                <i class="fas fa-{{ 'eye' if fence.is_active else 'eye-slash' }}"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteFence({{ fence.id }})"
+                                title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-3 text-muted" id="noFencesMsg">
+                            <i class="fas fa-draw-polygon"
+                                style="font-size:2rem;opacity:0.3;display:block;margin-bottom:0.5rem;"></i>
+                            No geo-fences defined yet. Add your first zone above.
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="glass-card p-4">
+                    <h6 class="mb-3"><i class="fas fa-map text-primary me-2"></i>Click map to set coordinates</h6>
+                    <div id="geoFencePickerMap" style="height:300px;border-radius:12px;overflow:hidden;"></div>
+                    <div class="mt-2 text-muted" style="font-size:0.78rem;">Click anywhere on the map to auto-fill
+                        Lat/Lng</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Routes Overview -->
+        <div id="active-routes" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="fas fa-route text-info me-2"></i>Active Tour Routes</h5>
+                        <span class="badge bg-info">{{ stats.active_routes }} registered</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-custom">
+                            <thead>
+                                <tr>
+                                    <th>Tourist ID</th>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Tour Dates</th>
+                                    <th>Zone Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tourist in tourists %}
+                                <tr>
+                                    <td><strong>{{ tourist.digital_id }}</strong></td>
+                                    <td>{{ tourist.name }}</td>
+                                    <td>
+                                        <span
+                                            class="badge {{ 'bg-warning text-dark' if tourist.tourist_type == 'INDIAN' else 'bg-info' }}">
+                                            {{ '🇮🇳' if tourist.tourist_type == 'INDIAN' else '🌍' }} {{
+                                            tourist.tourist_type }}
+                                        </span>
+                                    </td>
+                                    <td><small>{{ tourist.from_location or '—' }}</small></td>
+                                    <td><small>{{ tourist.to_location or '—' }}</small></td>
+                                    <td>
+                                        <small>
+                                            {% if tourist.tour_start_date %}{{ tourist.tour_start_date.strftime('%d %b')
+                                            }}{% endif %}
+                                            {% if tourist.tour_end_date %} → {{ tourist.tour_end_date.strftime('%d %b
+                                            %Y') }}{% endif %}
+                                            {% if not tourist.tour_start_date and not tourist.tour_end_date %}—{% endif
+                                            %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="zone-pill {{ tourist.zone_status or 'safe' }}">
+                                            {{ '🟢' if tourist.zone_status != 'out_of_zone' else '🔴' }}
+                                            {{ 'Safe' if tourist.zone_status != 'out_of_zone' else 'Out of Zone' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tourist ID Creation Section -->
+        <div id="create-tourist" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4">
+                        <i class="fas fa-id-card text-success me-2"></i>
+                        <span data-i18n="create_tourist_id">Create New Tourist ID</span>
+                    </h5>
+
+                    <!-- Tabs for Indian vs Foreign -->
+                    <ul class="nav nav-pills mb-4" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="indian-tab" data-bs-toggle="pill"
+                                data-bs-target="#indian-form" type="button" role="tab">
+                                <i class="fas fa-flag me-2"></i><span data-i18n="tab_indian">Indian Tourist</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="foreign-tab" data-bs-toggle="pill"
+                                data-bs-target="#foreign-form" type="button" role="tab">
+                                <i class="fas fa-globe me-2"></i><span data-i18n="tab_foreign">Foreign Tourist</span>
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <!-- Indian Tourist Form -->
+                        <div class="tab-pane fade show active" id="indian-form" role="tabpanel">
+                            <form id="indianTouristForm">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label" data-i18n="lbl_name">Name *</label>
+                                        <input type="text" class="form-control" name="name" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label"><span data-i18n="lbl_aadhar">Aadhar Number *</span>
+                                            <small class="text-muted" data-i18n="lbl_aadhar_hint">(12
+                                                digits)</small></label>
+                                        <input type="text" class="form-control" name="aadhar_number" pattern="[0-9]{12}"
+                                            required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" data-i18n="lbl_mobile">Mobile Number *</label>
+                                        <input type="tel" class="form-control" name="mobile"
+                                            data-i18n-placeholder="lbl_mobile_ph" placeholder="+91-XXXXXXXXXX" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" data-i18n="lbl_address">Address *</label>
+                                        <textarea class="form-control" name="address" rows="2" required></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-plus-circle me-2"></i><span
+                                                data-i18n="btn_create_indian">Create Indian Tourist ID</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Foreign Tourist Form -->
+                        <div class="tab-pane fade" id="foreign-form" role="tabpanel">
+                            <form id="foreignTouristForm">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label" data-i18n="lbl_name">Name *</label>
+                                        <input type="text" class="form-control" name="name" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" data-i18n="lbl_passport">Passport Number *</label>
+                                        <input type="text" class="form-control" name="passport_number" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" data-i18n="lbl_email">Email *</label>
+                                        <input type="email" class="form-control" name="email" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" data-i18n="lbl_country">Country *</label>
+                                        <input type="text" class="form-control" name="country" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-plus-circle me-2"></i><span
+                                                data-i18n="btn_create_foreign">Create Foreign Tourist ID</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Success Message Area -->
+                    <div id="touristCreationResult" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Tourists Table -->
+        <div id="tourists" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="mb-0">
+                            <i class="fas fa-users text-primary me-2"></i>
+                            <span data-i18n="live_tourist_monitoring">Live Tourist Monitoring</span>
+                        </h5>
+                        <span class="badge bg-success" data-i18n="auto_refresh_10">Auto-Refresh (10s)</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-custom">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_id">ID</th>
+                                    <th data-i18n="th_name">Name</th>
+                                    <th data-i18n="th_safety_score">Safety Score</th>
+                                    <th data-i18n="th_status">Status</th>
+                                    <th data-i18n="th_location">Location</th>
+                                    <th data-i18n="th_actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="touristsTableBody">
+                                {% for tourist in tourists %}
+                                <tr>
+                                    <td><strong>{{ tourist.digital_id }}</strong></td>
+                                    <td>{{ tourist.name }}</td>
+                                    <td>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar bg-{{ 'success' if tourist.safety_score >= 80 else ('warning' if tourist.safety_score >= 50 else 'danger') }}"
+                                                style="width: {{ tourist.safety_score }}%"></div>
+                                        </div>
+                                        <small>{{ tourist.safety_score }}%</small>
+                                    </td>
+                                    <td>
+                                        <span
+                                            class="badge bg-{{ 'success' if tourist.safety_score >= 80 else ('warning' if tourist.safety_score >= 50 else 'danger') }}"
+                                            data-i18n-value="tourist_status" data-raw-value="{{ tourist.status }}">
+                                            {{ tourist.status }}
+                                        </span>
+                                    </td>
+                                    <td><small>{{ tourist.last_location }}</small></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary"
+                                            onclick="viewTouristDetails('{{ tourist.digital_id }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map View -->
+        <div id="map" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4">
+                        <i class="fas fa-map-marked-alt text-primary me-2"></i>
+                        <span data-i18n="live_tracking_map">Live Tourist Tracking Map</span>
+                        <span class="badge bg-info ms-2">{{ tourists|length }} <span
+                                data-i18n="active_badge">Active</span></span>
+                    </h5>
+                    <div id="adminMap" class="map-container"></div>
+                    <div class="mt-3 d-flex gap-3 flex-wrap">
+                        <small><span class="badge bg-success"></span> <span data-i18n="map_safe">Safe
+                                (80%+)</span></small>
+                        <small><span class="badge bg-warning"></span> <span data-i18n="map_moderate">Moderate
+                                (50-80%)</span></small>
+                        <small><span class="badge bg-danger"></span> <span data-i18n="map_high_risk">High Risk
+                                (&lt;50%)</span></small>
+                        <small><span class="badge" style="background: #ef4444;"></span> <span
+                                data-i18n="map_risk_zones">Risk Zones</span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Center & SOS Panel -->
+        <div class="row g-4 mb-4">
+            <!-- Alerts -->
+            <div id="alerts" class="col-lg-7">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bell text-warning me-2"></i>
+                            <span data-i18n="alerts_command">Alerts Command Center</span>
+                        </h5>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-secondary active" data-severity-filter="all"
+                                data-i18n="filter_all">All</button>
+                            <button class="btn btn-outline-info" data-severity-filter="low"
+                                data-i18n="filter_low">Low</button>
+                            <button class="btn btn-outline-warning" data-severity-filter="medium"
+                                data-i18n="filter_medium">Medium</button>
+                            <button class="btn btn-outline-danger" data-severity-filter="high"
+                                data-i18n="filter_high">High</button>
+                            <button class="btn btn-dark" data-severity-filter="critical"
+                                data-i18n="filter_critical">Critical</button>
+                        </div>
+                    </div>
+                    <div style="max-height: 500px; overflow-y: auto;">
+                        {% for alert in alerts %}
+                        <div class="alert-item severity-{{ alert.severity }}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold mb-1">{{ alert.message }}</div>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>{{ alert.created_at.strftime('%H:%M:%S') }}
+                                        {% if alert.tourist %}
+                                        • Tourist: {{ alert.tourist.digital_id }}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <span
+                                    class="badge bg-{{ 'dark' if alert.severity == 'critical' else ('danger' if alert.severity == 'high' else ('warning' if alert.severity == 'medium' else 'info')) }} ms-2">
+                                    {{ alert.severity.upper() }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- SOS Dispatch Panel -->
+            <div id="sos" class="col-lg-5">
+                <div class="glass-card p-4" style="border: 2px solid var(--danger);">
+                    <h5 class="text-danger mb-4">
+                        <i class="fas fa-siren-on me-2"></i>
+                        <span data-i18n="sos_panel">SOS Dispatch Panel</span>
+                    </h5>
+
+                    {% if sos_list %}
+                    {% for sos in sos_list %}
+                    <div class="alert alert-danger mb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1 fw-bold">
+                                    {{ sos.tourist.name }}
+                                    <span class="badge bg-dark ms-2">{{ sos.tourist.digital_id }}</span>
+                                </h6>
+                                <small class="d-block mb-2">
+                                    <i class="fas fa-map-pin me-1"></i>{{ sos.location }}
+                                </small>
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-clock me-1"></i>{{ sos.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </small>
+                            </div>
+                        </div>
+                        <button class="btn btn-danger btn-sm w-100 mt-3" onclick="dispatchSOS({{ sos.id }})">
+                            <i class="fas fa-truck me-2"></i>
+                            <span data-i18n="dispatch_police">DISPATCH POLICE UNITS</span>
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 3rem; opacity: 0.5;"></i>
+                        <p class="mt-3 text-muted" data-i18n="no_sos">No active SOS requests</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Hospital/Ambulance Dispatch Panel -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4" style="border: 2px solid #3b82f6;">
+                    <h5 class="mb-4" style="color: #3b82f6;">
+                        <i class="fas fa-ambulance me-2"></i>
+                        <span data-i18n="hospital_panel">Hospital/Ambulance Dispatch Panel</span>
+                    </h5>
+
+                    {% if hospital_list %}
+                    <div class="row g-3">
+                        {% for hospital in hospital_list %}
+                        <div class="col-md-6">
+                            <div class="alert mb-3"
+                                style="background: #eff6ff; border: 1px solid #3b82f6; border-left: 4px solid #3b82f6;">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 fw-bold">
+                                            {{ hospital.tourist.name }}
+                                            <span class="badge bg-info ms-2">{{ hospital.tourist.digital_id }}</span>
+                                        </h6>
+                                        <small class="d-block mb-2">
+                                            <i class="fas fa-map-pin me-1"></i>{{ hospital.location }}
+                                        </small>
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-clock me-1"></i>{{ hospital.created_at.strftime('%Y-%m-%d
+                                            %H:%M:%S') }}
+                                        </small>
+                                        <span
+                                            class="badge mt-2 {% if hospital.status == 'pending' %}bg-warning{% else %}bg-success{% endif %}">
+                                            {{ hospital.status.upper() }}
+                                        </span>
+                                    </div>
+                                </div>
+                                {% if hospital.status == 'pending' %}
+                                <button class="btn btn-primary btn-sm w-100 mt-3"
+                                    onclick="dispatchHospital({{ hospital.id }})">
+                                    <i class="fas fa-ambulance me-2"></i>
+                                    <span data-i18n="dispatch_ambulance">DISPATCH AMBULANCE</span>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 3rem; opacity: 0.5;"></i>
+                        <p class="mt-3 text-muted" data-i18n="no_ambulance">No active ambulance requests</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Stats -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="glass-card p-4">
+                    <h6 class="mb-3">
+                        <i class="fas fa-chart-pie text-primary me-2"></i>
+                        <span data-i18n="sys_health">System Health</span>
+                    </h6>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span data-i18n="sys_ai_engine">AI Engine</span>
+                        <span class="badge bg-success" data-i18n="status_running">✓ Running</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span data-i18n="sys_gps">GPS Tracking</span>
+                        <span class="badge bg-success" data-i18n="status_online">✓ Online</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span data-i18n="sys_alert_sys">Alert System</span>
+                        <span class="badge bg-success" data-i18n="status_active">✓ Active</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span data-i18n="sys_database">Database</span>
+                        <span class="badge bg-success" data-i18n="status_connected">✓ Connected</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="glass-card p-4">
+                    <h6 class="mb-3">
+                        <i class="fas fa-folder-open text-warning me-2"></i>
+                        <span data-i18n="records_summary">Records Summary</span>
+                    </h6>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span data-i18n="rec_sos">SOS Requests</span>
+                        <strong>{{ stats.sos_requests }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span data-i18n="rec_efir">E-FIRs Filed</span>
+                        <strong>{{ stats.total_efirs }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span data-i18n="rec_evidence">Evidence Logs</span>
+                        <strong>{{ stats.get('evidence_count', 0) }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span data-i18n="rec_critical">Critical Incidents</span>
+                        <strong class="text-danger">{{ stats.critical_alerts }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Downloads Section -->
+        <div id="pdf" class="row g-4 mb-4">
+            <div class="col-12">
+                <h5 class="mb-3">
+                    <i class="fas fa-file-pdf text-danger me-2"></i>
+                    <span data-i18n="admin_reports">Administrative Reports &amp; Downloads</span>
+                </h5>
+            </div>
+
+            <div class="col-md-3">
+                <div class="pdf-download-card">
+                    <div class="pdf-icon">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2" data-i18n="pdf_daily">Daily Summary</h6>
+                    <p class="small text-muted mb-3" data-i18n="pdf_daily_desc">Complete tourist safety overview</p>
+                    <a href="{{ url_for('admin_pdf_daily_summary') }}" class="btn btn-gradient w-100">
+                        <i class="fas fa-download me-2"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="pdf-download-card">
+                    <div class="pdf-icon">
+                        <i class="fas fa-ambulance"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2" data-i18n="pdf_sos">SOS Report</h6>
+                    <p class="small text-muted mb-3" data-i18n="pdf_sos_desc">Emergency incidents log</p>
+                    <a href="{{ url_for('admin_pdf_sos_report') }}" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-download me-2"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="pdf-download-card">
+                    <div class="pdf-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2" data-i18n="pdf_evidence">Evidence Logs</h6>
+                    <p class="small text-muted mb-3" data-i18n="pdf_evidence_desc">All evidence &amp; timestamps</p>
+                    <a href="{{ url_for('admin_pdf_evidence_logs') }}" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-download me-2"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="pdf-download-card">
+                    <div class="pdf-icon">
+                        <i class="fas fa-file-contract"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2" data-i18n="pdf_efir">E-FIR Archive</h6>
+                    <p class="small text-muted mb-3" data-i18n="pdf_efir_desc">All filed FIRs</p>
+                    <a href="{{ url_for('admin_pdf_efir_archive') }}" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-download me-2"></i><span data-i18n="btn_download">Download PDF</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Sidebar Toggle (Mobile) -->
+<button id="sidebarToggle" class="sidebar-toggle">
+    <i class="fas fa-bars"></i>
+</button>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const GEO_FENCES_ADMIN = {{ geo_fences_json | safe }};
+</script>
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin_functions.js') }}"></script>
+<script>
+    // ============ GOOGLE MAPS - GEO-FENCE PICKER MAP ============
+    let pickerMap, pickerMarker;
+    function initGeoFencePicker() {
+        const el = document.getElementById('geoFencePickerMap');
+        if (!el || pickerMap) return;
+        pickerMap = new google.maps.Map(el, {
+            center: { lat: 28.6139, lng: 77.2090 },
+            zoom: 11
+        });
+
+        // Draw existing fences on picker map
+        GEO_FENCES_ADMIN.forEach(f => {
+            const color = f.zone_type === 'safe' ? '#10b981' : '#ef4444';
+            new google.maps.Circle({
+                map: pickerMap,
+                center: { lat: f.lat, lng: f.lng },
+                radius: f.radius,
+                fillColor: color,
+                fillOpacity: 0.15,
+                strokeColor: color,
+                strokeWeight: 2
+            });
+        });
+
+        // Click to pick coordinates
+        pickerMap.addListener('click', function(e) {
+            const lat = e.latLng.lat();
+            const lng = e.latLng.lng();
+            document.getElementById('gf_lat').value = lat.toFixed(6);
+            document.getElementById('gf_lng').value = lng.toFixed(6);
+            if (pickerMarker) pickerMarker.setPosition(e.latLng);
+            else pickerMarker = new google.maps.Marker({ position: e.latLng, map: pickerMap });
+        });
+    }
+
+    // ============ GEO-FENCE CRUD ============
+    async function addGeoFence() {
+        const name = document.getElementById('gf_name').value.trim();
+        const zone_type = document.getElementById('gf_type').value;
+        const lat = parseFloat(document.getElementById('gf_lat').value);
+        const lng = parseFloat(document.getElementById('gf_lng').value);
+        const radius_km = parseFloat(document.getElementById('gf_radius').value) || 1;
+        const description = document.getElementById('gf_desc').value.trim();
+
+        if (!name || isNaN(lat) || isNaN(lng)) {
+            alert('Please enter zone name and click the map to set coordinates.');
+            return;
+        }
+
+        const res = await fetch('/api/geo-fence/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, zone_type, lat, lng, radius_km, description })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown'));
+        }
+    }
+
+    async function deleteFence(id) {
+        if (!confirm('Delete this geo-fence zone?')) return;
+        const res = await fetch('/api/geo-fence/delete/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.status === 'success') {
+            document.getElementById('gf-item-' + id)?.remove();
+        }
+    }
+
+    async function toggleFence(id) {
+        const res = await fetch('/api/geo-fence/toggle/' + id, { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'success') location.reload();
+    }
+
+    // Tourist ID Creation Form Handlers
+    document.getElementById('indianTouristForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const data = {
+            tourist_type: 'INDIAN',
+            name: formData.get('name'),
+            aadhar_number: formData.get('aadhar_number'),
+            mobile: formData.get('mobile'),
+            address: formData.get('address')
+        };
+
+        try {
+            const response = await fetch('/api/admin/create-tourist-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                document.getElementById('touristCreationResult').innerHTML =
+                    `<div class="alert alert-success"><strong>Success!</strong> ${result.message}<br>` +
+                    `<small>Tourist ID: ${result.digital_id} | Username: ${result.username} | Password: tourist@123</small></div>`;
+                this.reset();
+                setTimeout(() => location.reload(), 15000);
+            } else {
+                document.getElementById('touristCreationResult').innerHTML =
+                    `<div class="alert alert-danger"><strong>Error!</strong> ${result.error}</div>`;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('touristCreationResult').innerHTML =
+                `<div class="alert alert-danger"><strong>Error!</strong> Failed to create tourist ID.</div>`;
+        }
+    });
+
+    document.getElementById('foreignTouristForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const data = {
+            tourist_type: 'FOREIGN',
+            name: formData.get('name'),
+            passport_number: formData.get('passport_number'),
+            email: formData.get('email'),
+            country: formData.get('country')
+        };
+
+        try {
+            const response = await fetch('/api/admin/create-tourist-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                document.getElementById('touristCreationResult').innerHTML =
+                    `<div class="alert alert-success"><strong>Success!</strong> ${result.message}<br>` +
+                    `<small>Tourist ID: ${result.digital_id} | Username: ${result.username} | Password: tourist@123</small></div>`;
+                this.reset();
+                setTimeout(() => location.reload(), 15000);
+            } else {
+                document.getElementById('touristCreationResult').innerHTML =
+                    `<div class="alert alert-danger"><strong>Error!</strong> ${result.error}</div>`;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('touristCreationResult').innerHTML =
+                `<div class="alert alert-danger"><strong>Error!</strong> Failed to create tourist ID.</div>`;
+        }
+    });
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_KEY }}&callback=initAdminMaps" async defer></script>
+{% endblock %}
