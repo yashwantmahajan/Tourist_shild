@@ -44,40 +44,7 @@ function initAdminTrackingMap() {
     // Load initial tourist markers
     updateTouristMarkers();
 
-    // Live position refresh every 15 seconds
-    setInterval(function () {
-        fetch('/api/admin/all-tourists-location')
-            .then(r => r.json())
-            .then(data => {
-                // Clear existing markers
-                adminMarkers.forEach(m => m.setMap(null));
-                adminMarkers = [];
-                data.forEach(t => {
-                    const color = getMarkerColor(t.safety_score);
-                    const marker = new google.maps.Marker({
-                        position: { lat: t.lat, lng: t.lng },
-                        map: adminMap,
-                        title: t.name,
-                        icon: {
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 8,
-                            fillColor: color,
-                            fillOpacity: 1,
-                            strokeColor: '#fff',
-                            strokeWeight: 2
-                        }
-                    });
-                    const iw = new google.maps.InfoWindow({
-                        content: `<strong>${t.name}</strong><br>Score: ${t.safety_score}%<br>Status: ${t.status}<br>${t.last_location}`
-                    });
-                    marker.addListener('click', () => iw.open(adminMap, marker));
-                    adminMarkers.push(marker);
-                });
-            })
-            .catch(() => {});
-    }, 15000);
-
-    // Also start polling for table
+    // Start polling for table and map
     startAdminPolling();
 }
 
@@ -163,6 +130,9 @@ function updateTouristMarkers() {
                     content: `<strong>${tourist.name}</strong><br>Score: ${tourist.safety_score}%<br>Status: ${tourist.status}`
                 });
                 marker.addListener('click', () => iw.open(adminMap, marker));
+                // Add tourist info to marker object for searching
+                marker.touristInfo = tourist;
+                marker.infoWindow = iw;
                 adminMarkers.push(marker);
             });
         })
@@ -213,6 +183,35 @@ function filterAlerts(severity) {
     });
 }
 
+// ============== SEARCH MAP ==============
+function searchTouristOnMap() {
+    const query = document.getElementById('mapSearchInput').value.toLowerCase().trim();
+    if (!query) {
+        showToast('Please enter a name or ID to search', 'warning');
+        return;
+    }
+    
+    let found = false;
+    for (let marker of adminMarkers) {
+        if (!marker.touristInfo) continue;
+        const name = (marker.touristInfo.name || '').toLowerCase();
+        const id = (marker.touristInfo.digital_id || '').toLowerCase();
+        
+        if (name.includes(query) || id.includes(query)) {
+            // Center map and open info window
+            adminMap.setZoom(16);
+            adminMap.panTo(marker.getPosition());
+            marker.infoWindow.open(adminMap, marker);
+            found = true;
+            break;
+        }
+    }
+    
+    if (!found) {
+        showToast('Tourist not found on the map', 'danger');
+    }
+}
+
 // ============== SOS DISPATCH ==============
 function dispatchSOS(sosId) {
     if (!confirm('Dispatch police units to this location?')) return;
@@ -252,3 +251,4 @@ window.addEventListener('beforeunload', function () {
 window.dispatchSOS = dispatchSOS;
 window.viewTouristDetails = viewTouristDetails;
 window.initAdminMaps = initAdminMaps;
+window.searchTouristOnMap = searchTouristOnMap;

@@ -84,7 +84,7 @@ class AmbulanceTracker {
                     this.initializeMap();
                     // Force map to recalculate size
                     if (this.map) {
-                        this.map.invalidateSize();
+                        google.maps.event.trigger(this.map, 'resize');
                     }
                     this.startTracking();
                 }, 300);
@@ -393,56 +393,17 @@ class AmbulanceTracker {
     }
 
     /**
-     * Initialize Leaflet map with ambulance icon
+     * Initialize Google map with ambulance icon
      */
     initializeMap() {
-        this.map = L.map('ambulanceMap').setView([28.6139, 77.2090], 13);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(this.map);
-
-        // Custom ambulance icon with actual ambulance emoji/icon
-        const ambulanceIcon = L.divIcon({
-            className: 'custom-ambulance-marker',
-            html: `
-                <div style="position: relative;">
-                    <div style="background: #dc2626; color: white; padding: 12px; border-radius: 50%; font-size: 24px; box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5); border: 4px solid white; animation: ambulancePulse 2s ease-in-out infinite;">
-                        <i class="fas fa-ambulance"></i>
-                    </div>
-                    <div style="position: absolute; top: -8px; right: -8px; background: #10b981; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white;">
-                        <i class="fas fa-heartbeat"></i>
-                    </div>
-                </div>
-            `,
-            iconSize: [50, 50],
-            iconAnchor: [25, 25]
+        this.map = new google.maps.Map(document.getElementById('ambulanceMap'), {
+            center: { lat: 28.6139, lng: 77.2090 },
+            zoom: 13,
+            mapTypeControl: false,
+            streetViewControl: false
         });
 
-        const touristIcon = L.divIcon({
-            className: 'custom-tourist-marker',
-            html: `
-                <div style="background: #2563eb; color: white; padding: 12px; border-radius: 50%; font-size: 24px; box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5); border: 4px solid white;">
-                    <i class="fas fa-user"></i>
-                </div>
-            `,
-            iconSize: [50, 50],
-            iconAnchor: [25, 25]
-        });
-
-        this.ambulanceIcon = ambulanceIcon;
-        this.touristIcon = touristIcon;
-
-        // Add ambulance pulse animation
-        const animStyle = document.createElement('style');
-        animStyle.textContent = `
-            @keyframes ambulancePulse {
-                0%, 100% { transform: scale(1); }
-                50% { transform: scale(1.1); }
-            }
-        `;
-        document.head.appendChild(animStyle);
+        // Use custom marker icons later in updateMap via google.maps.Marker
     }
 
     /**
@@ -577,52 +538,77 @@ class AmbulanceTracker {
             return;
         }
 
-        const ambulanceLoc = [data.ambulance_location.lat, data.ambulance_location.lng];
-        const touristLoc = [data.tourist_location.lat, data.tourist_location.lng];
+        const ambulanceLoc = { lat: data.ambulance_location.lat, lng: data.ambulance_location.lng };
+        const touristLoc = { lat: data.tourist_location.lat, lng: data.tourist_location.lng };
 
         console.log('Updating map with locations:', { ambulanceLoc, touristLoc });
 
         // Update or create ambulance marker
         if (this.ambulanceMarker) {
-            this.ambulanceMarker.setLatLng(ambulanceLoc);
+            this.ambulanceMarker.setPosition(ambulanceLoc);
         } else {
-            this.ambulanceMarker = L.marker(ambulanceLoc, { icon: this.ambulanceIcon })
-                .addTo(this.map)
-                .bindPopup(`<b>${data.ambulance_unit}</b><br>Status: ${data.status}`);
+            this.ambulanceMarker = new google.maps.Marker({
+                position: ambulanceLoc,
+                map: this.map,
+                title: data.ambulance_unit,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: '#dc2626',
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 3
+                }
+            });
+            const info = new google.maps.InfoWindow({ content: `<b>${data.ambulance_unit}</b><br>Status: ${data.status}` });
+            this.ambulanceMarker.addListener('click', () => info.open(this.map, this.ambulanceMarker));
         }
 
         // Update or create tourist marker
         if (this.touristMarker) {
-            this.touristMarker.setLatLng(touristLoc);
+            this.touristMarker.setPosition(touristLoc);
         } else {
-            this.touristMarker = L.marker(touristLoc, { icon: this.touristIcon })
-                .addTo(this.map)
-                .bindPopup(`<b>Your Location</b><br>${data.tourist_name}`);
+            this.touristMarker = new google.maps.Marker({
+                position: touristLoc,
+                map: this.map,
+                title: 'Your Location',
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 10,
+                    fillColor: '#2563eb',
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 2
+                }
+            });
+            const info = new google.maps.InfoWindow({ content: `<b>Your Location</b><br>${data.tourist_name}` });
+            this.touristMarker.addListener('click', () => info.open(this.map, this.touristMarker));
         }
 
         // Update or create route line
         if (this.routeLine) {
-            this.routeLine.setLatLngs([ambulanceLoc, touristLoc]);
+            this.routeLine.setPath([ambulanceLoc, touristLoc]);
         } else {
-            this.routeLine = L.polyline([ambulanceLoc, touristLoc], {
-                color: '#dc2626',
-                weight: 5,
-                opacity: 0.7,
-                dashArray: '15, 10'
-            }).addTo(this.map);
+            this.routeLine = new google.maps.Polyline({
+                path: [ambulanceLoc, touristLoc],
+                geodesic: true,
+                strokeColor: '#dc2626',
+                strokeOpacity: 0.7,
+                strokeWeight: 5,
+                map: this.map
+            });
         }
 
-        // Fit map to show both markers with padding
-        const bounds = L.latLngBounds([ambulanceLoc, touristLoc]);
-        this.map.fitBounds(bounds, {
-            padding: [80, 80],
-            maxZoom: 15
-        });
+        // Fit map to show both markers
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend(ambulanceLoc);
+        bounds.extend(touristLoc);
+        this.map.fitBounds(bounds);
 
         // Force map to refresh
         setTimeout(() => {
             if (this.map) {
-                this.map.invalidateSize();
+                google.maps.event.trigger(this.map, 'resize');
             }
         }, 100);
     }
@@ -677,9 +663,14 @@ class AmbulanceTracker {
      */
     cleanup() {
         if (this.map) {
-            this.map.remove();
-            this.map = null;
+            this.map = null; // Google Maps doesn't have a direct remove()
+            const mapEl = document.getElementById('ambulanceMap');
+            if(mapEl) mapEl.innerHTML = ''; // Clear DOM
         }
+        if (this.ambulanceMarker) this.ambulanceMarker.setMap(null);
+        if (this.touristMarker) this.touristMarker.setMap(null);
+        if (this.routeLine) this.routeLine.setMap(null);
+        
         this.ambulanceMarker = null;
         this.touristMarker = null;
         this.routeLine = null;

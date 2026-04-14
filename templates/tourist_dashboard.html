@@ -403,17 +403,19 @@
                                 </span>
                             </div>
                         </div>
-                        <i class="fas fa-route" style="font-size:2rem;opacity:0.7;"></i>
+                        <div class="d-flex gap-2">
+                            <i class="fas fa-route" style="font-size:2rem;opacity:0.7;"></i>
+                        </div>
                     </div>
                     <div class="d-flex align-items-center gap-3 flex-wrap">
                         <div>
                             <div class="route-label">FROM</div>
-                            <div class="route-location">{{ profile.from_location or 'Not Set' }}</div>
+                            <div class="route-location" id="lblFromLocation">{{ profile.from_location or 'Not Set' }}</div>
                         </div>
                         <div class="route-arrow">→</div>
                         <div>
                             <div class="route-label">TO</div>
-                            <div class="route-location">{{ profile.to_location or 'Not Set' }}</div>
+                            <div class="route-location" id="lblToLocation">{{ profile.to_location or 'Not Set' }}</div>
                         </div>
                     </div>
                     {% if profile.tour_start_date or profile.tour_end_date %}
@@ -449,6 +451,39 @@
                                 </div>
                             </div>
                             <strong>{{ safety_score }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Change Route Section -->
+        <div id="change-route" class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <h5 class="mb-4">
+                        <i class="fas fa-route text-primary me-2"></i>
+                        <span>Update Tour Route</span>
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <form id="inlineChangeRouteForm" class="d-flex flex-column h-100 justify-content-center">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small fw-bold">From Location</label>
+                                    <input type="text" class="form-control" id="inlineEditFrom" value="{{ profile.from_location }}" required placeholder="e.g. New Delhi">
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label text-muted small fw-bold">To Location</label>
+                                    <input type="text" class="form-control" id="inlineEditTo" value="{{ profile.to_location }}" required placeholder="e.g. Jaipur">
+                                </div>
+                                <button type="submit" class="btn w-100 text-white" style="background:#667eea; border-radius:12px; font-weight:600; padding:0.75rem;">
+                                    <i class="fas fa-save me-2"></i>Save Route Changes
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-8">
+                            <div id="routeUpdateMap" style="width: 100%; height: 300px; border-radius: 14px; border: 1px solid #e5e7eb;"></div>
+                            <small class="text-muted mt-2 d-block"><i class="fas fa-info-circle me-1"></i> Preview your updated route on the map above.</small>
                         </div>
                     </div>
                 </div>
@@ -561,20 +596,20 @@
                     </h5>
                     <div id="touristMap" class="map-container"></div>
 
-                    <!-- GPS Status Bar — auto-requests location on load like Google Maps -->
+                    <!-- GPS Status Bar — detects location automatically (IP-based, no permission needed) -->
                     <div id="gpsStatusBar" class="mt-2 px-3 py-2 rounded-3"
                         style="background:rgba(59,130,246,0.1);border:1px solid #3b82f6;transition:all 0.4s;">
                         <div class="d-flex align-items-center gap-2">
                             <span id="gpsStatusIcon"><i class="fas fa-spinner fa-spin text-primary"></i></span>
                             <span id="gpsStatusText" class="small fw-medium flex-grow-1">
-                                <span class="text-primary fw-semibold">Acquiring GPS…</span>
-                                <small class="text-muted ms-2">Please allow location when browser asks</small>
+                                <span class="text-primary fw-semibold">Detecting your location…</span>
+                                <small class="text-muted ms-2">This happens automatically — no action needed</small>
                             </span>
-                            <!-- Button hidden by default, shown only if blocked/error -->
+                            <!-- Shown only when user wants to upgrade to GPS -->
                             <button id="enableGPSBtn" onclick="enableLiveTracking()"
-                                class="btn btn-sm btn-outline-danger d-none d-inline-flex align-items-center gap-1"
+                                class="btn btn-sm btn-outline-primary d-none d-inline-flex align-items-center gap-1"
                                 style="font-size:0.82rem;padding:0.3rem 0.85rem;border-radius:8px;white-space:nowrap;">
-                                <i class="fas fa-redo"></i> Retry
+                                <i class="fas fa-location-arrow"></i> Enable GPS
                             </button>
                         </div>
 
@@ -795,6 +830,7 @@
                 </div>
             </div>
         </div>
+
     </main>
 </div>
 
@@ -840,6 +876,8 @@
 {% block extra_js %}
 <script>
     const GEO_FENCES = {{ geo_fences_json | safe }};
+    window.LAST_KNOWN_LAT = {{ profile.current_lat or 20.5937 }};
+    window.LAST_KNOWN_LNG = {{ profile.current_lng or 78.9629 }};
 </script>
 <script src="{{ url_for('static', filename='js/tourist.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ambulance_tracking.js') }}"></script>
@@ -945,6 +983,89 @@
                     });
             });
     }, 30000);
+
+    // Initialise Google Maps Route Update Section
+    let routeUpdateMap, routeRenderer, routeService;
+
+    function initInlineRoutePanel() {
+        const fromInput = document.getElementById('inlineEditFrom');
+        const toInput = document.getElementById('inlineEditTo');
+        const mapEl = document.getElementById('routeUpdateMap');
+
+        if(window.google && google.maps && google.maps.places) {
+            const autoFrom = new google.maps.places.Autocomplete(fromInput);
+            const autoTo = new google.maps.places.Autocomplete(toInput);
+
+            routeUpdateMap = new google.maps.Map(mapEl, {
+                center: { lat: 28.6139, lng: 77.2090 },
+                zoom: 5,
+                mapTypeControl: false,
+                streetViewControl: false
+            });
+
+            routeRenderer = new google.maps.DirectionsRenderer({ map: routeUpdateMap });
+            routeService = new google.maps.DirectionsService();
+
+            const drawRoute = () => {
+                const fromVal = fromInput.value;
+                const toVal = toInput.value;
+                if(fromVal && toVal) {
+                    routeService.route({
+                        origin: fromVal,
+                        destination: toVal,
+                        travelMode: google.maps.TravelMode.DRIVING
+                    }, (response, status) => {
+                        if (status === 'OK') {
+                            routeRenderer.setDirections(response);
+                        }
+                    });
+                }
+            };
+
+            autoFrom.addListener('place_changed', drawRoute);
+            autoTo.addListener('place_changed', drawRoute);
+            
+            // Initial draw
+            drawRoute();
+        }
+    }
+
+    // Since google maps is loaded async, hook into initMap or fire via timeout
+    setTimeout(() => { if(window.google) initInlineRoutePanel(); }, 2000);
+
+    document.getElementById('inlineChangeRouteForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const from = document.getElementById('inlineEditFrom').value;
+        const to = document.getElementById('inlineEditTo').value;
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Saving...';
+        
+        fetch('/api/tourist/update-route', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ from_location: from, to_location: to })
+        })
+        .then(r => r.json())
+        .then(data => {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Save Route Changes';
+            if(data.status === 'success') {
+                document.getElementById('lblFromLocation').innerText = data.from_location;
+                document.getElementById('lblToLocation').innerText = data.to_location;
+                alert('Route Updated Successfully!');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Save Route Changes';
+            alert('A network error occurred.');
+        });
+    });
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_KEY }}&libraries=geometry,places&callback=initMap" async defer></script>
 {% endblock %}

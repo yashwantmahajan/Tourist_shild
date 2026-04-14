@@ -397,12 +397,20 @@
         <div id="map" class="row g-4 mb-4">
             <div class="col-12">
                 <div class="glass-card p-4">
-                    <h5 class="mb-4" style="color: #667eea;">
-                        <i class="fas fa-map-marked-alt me-2"></i>
-                        <span data-i18n="live_tourist_tracking">Live Tourist Tracking</span>
-                        <span class="badge ms-2" style="background: #667eea; color: white;">{{ tourists|length }}
-                            <span data-i18n="active_badge">Active</span></span>
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+                        <h5 class="mb-0" style="color: #667eea;">
+                            <i class="fas fa-map-marked-alt me-2"></i>
+                            <span data-i18n="live_tourist_tracking">Live Tourist Tracking</span>
+                            <span class="badge ms-2" style="background: #667eea; color: white;">{{ tourists|length }}
+                                <span data-i18n="active_badge">Active</span></span>
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <input type="text" id="policeMapSearchInput" class="form-control form-control-sm" placeholder="Search by name or ID..." onkeypress="if(event.key === 'Enter') searchPoliceMap()">
+                            <button class="btn btn-sm" style="background-color: #667eea; color: white;" onclick="searchPoliceMap()">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
                     <div id="policeMap" class="map-container"></div>
                 </div>
             </div>
@@ -492,6 +500,7 @@
 
     // ============ Google Maps Police Map ============
     let policeMap, directionsRenderer;
+    let policeMarkers = [];
 
     function initPoliceMap() {
         const mapEl = document.getElementById('policeMap');
@@ -504,13 +513,16 @@
 
         directionsRenderer = new google.maps.DirectionsRenderer({ map: policeMap });
 
+        // Load INITIAL markers from server render
         const tourists = [
             {% for tourist in tourists %}
             {% if tourist.current_lat and tourist.current_lng %}
             {
+                digital_id: "{{ tourist.digital_id }}",
                 lat: {{ tourist.current_lat }},
                 lng: {{ tourist.current_lng }},
                 name: "{{ tourist.name }}",
+                safety_score: {{ tourist.safety_score | default(100) }},
                 status: "{{ tourist.status }}",
                 location: "{{ tourist.last_location }}"
             },
@@ -518,9 +530,36 @@
             {% endfor %}
         ];
 
+        renderPoliceMarkers(tourists);
+
+        // Start live polling every 15 seconds
+        setInterval(() => {
+            fetch('/api/admin/live-data')
+                .then(response => response.json())
+                .then(data => {
+                    renderPoliceMarkers(data);
+                })
+                .catch(error => console.error('Police map markers update error:', error));
+        }, 15000);
+    }
+
+    function renderPoliceMarkers(tourists) {
+        if (!policeMap) return;
+        policeMarkers.forEach(m => m.setMap(null));
+        policeMarkers = [];
+
         tourists.forEach(t => {
-            const color = t.status === 'Safe' ? '#22c55e'
-                        : t.status === 'Warning' ? '#f59e0b' : '#ef4444';
+            if (!t.lat || !t.lng) return;
+            const score = t.safety_score;
+            let color = '#22c55e'; // safe
+            if (score !== undefined) {
+                if (score < 80 && score >= 50) color = '#f59e0b'; // warning
+                else if (score < 50) color = '#ef4444'; // danger
+            } else {
+                if (t.status === 'Warning') color = '#f59e0b';
+                else if (t.status !== 'Safe') color = '#ef4444';
+            }
+
             const marker = new google.maps.Marker({
                 position: { lat: t.lat, lng: t.lng },
                 map: policeMap,
@@ -535,10 +574,35 @@
                 }
             });
             const infoWindow = new google.maps.InfoWindow({
-                content: `<div><strong>${t.name}</strong><br>${t.location}<br><span style="color:${color}">${t.status}</span></div>`
+                content: `<div><strong>${t.name}</strong><br>${t.location || t.last_location || ""}<br><span style="color:${color}">${t.status}</span></div>`
             });
             marker.addListener('click', () => infoWindow.open(policeMap, marker));
+            
+            // Save info to marker for search
+            marker.touristInfo = t;
+            marker.infoWindow = infoWindow;
+            policeMarkers.push(marker);
         });
+    }
+
+    function searchPoliceMap() {
+        const query = document.getElementById('policeMapSearchInput').value.toLowerCase().trim();
+        if (!query) return;
+        let found = false;
+        for (let marker of policeMarkers) {
+            if (!marker.touristInfo) continue;
+            const name = (marker.touristInfo.name || '').toLowerCase();
+            const id = (marker.touristInfo.digital_id || '').toLowerCase();
+            
+            if (name.includes(query) || id.includes(query)) {
+                policeMap.setZoom(16);
+                policeMap.panTo(marker.getPosition());
+                marker.infoWindow.open(policeMap, marker);
+                found = true;
+                break;
+            }
+        }
+        if (!found) alert('Tourist not found on the map');
     }
 
     function showRouteToTourist(touristLat, touristLng) {

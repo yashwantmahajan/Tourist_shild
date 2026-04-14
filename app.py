@@ -255,8 +255,12 @@ def signup():
 def tourist_dashboard():
     """Tourist Dashboard - Main View"""
     if current_user.role != 'TOURIST':
-        flash('Access denied. Admin accounts cannot access tourist dashboard.', 'danger')
-        return redirect(url_for('admin_dashboard'))
+        if current_user.role == 'POLICE':
+            flash('Access denied. Please use the Police dashboard.', 'danger')
+            return redirect(url_for('police_dashboard'))
+        else:
+            flash('Access denied. Please use the Admin dashboard.', 'danger')
+            return redirect(url_for('admin_dashboard'))
     
     # Get tourist profile
     tourist_profile = TouristProfile.query.filter_by(user_id=current_user.id).first()
@@ -725,7 +729,7 @@ def api_update_tourist_location():
     lat = data.get('lat')
     lng = data.get('lng')
     location_name = data.get('location_name', 'Unknown')
-    if not lat or not lng:
+    if lat is None or lng is None:
         return jsonify({'error': 'Missing coordinates'}), 400
     profile = TouristProfile.query.filter_by(user_id=current_user.id).first()
     if not profile:
@@ -736,6 +740,51 @@ def api_update_tourist_location():
     profile.last_update = datetime.utcnow()
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+@app.route('/api/tourist/ip-location')
+@login_required
+def api_ip_location():
+    """Return approximate location from the visitor's IP — NO browser permission needed.
+    Uses ip-api.com (free, no API key). Falls back to New Delhi if lookup fails."""
+    import urllib.request
+    import json as _json
+
+    # Get the real client IP (handles reverse proxies)
+    ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+          or request.headers.get('X-Real-IP', '')
+          or request.remote_addr
+          or '')
+
+    # Loopback / private IPs on localhost dev → use New Delhi for demo
+    private_prefixes = ('127.', '10.', '192.168.', '172.', '::1', '')
+    if any(ip.startswith(p) for p in private_prefixes):
+        return jsonify({
+            'lat': 28.6129, 'lng': 77.2295,
+            'city': 'New Delhi', 'region': 'Delhi',
+            'country': 'India', 'source': 'default_local'
+        })
+
+    try:
+        url = f'http://ip-api.com/json/{ip}?fields=status,lat,lon,city,regionName,country'
+        with urllib.request.urlopen(url, timeout=4) as resp:
+            geo = _json.loads(resp.read().decode())
+        if geo.get('status') == 'success':
+            return jsonify({
+                'lat': geo['lat'], 'lng': geo['lon'],
+                'city': geo.get('city', ''), 'region': geo.get('regionName', ''),
+                'country': geo.get('country', ''), 'source': 'ip'
+            })
+    except Exception:
+        pass
+
+    # Final fallback — India Gate, New Delhi
+    return jsonify({
+        'lat': 28.6139, 'lng': 77.2090,
+        'city': 'New Delhi', 'region': 'Delhi',
+        'country': 'India', 'source': 'fallback'
+    })
+
 
 @app.route('/api/admin/all-tourists-location')
 @login_required
@@ -750,6 +799,31 @@ def api_all_tourist_locations():
         'status': p.status, 'safety_score': p.safety_score,
         'last_location': p.last_location
     } for p in profiles if p.current_lat])
+
+@app.route('/api/tourist/update-route', methods=['POST'])
+@login_required
+def api_tourist_update_route():
+    """Update tourist from/to locations dynamically"""
+    if current_user.role != 'TOURIST':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    tourist_profile = TouristProfile.query.filter_by(user_id=current_user.id).first()
+    data = request.get_json()
+    from_loc = data.get('from_location', '').strip()
+    to_loc = data.get('to_location', '').strip()
+    
+    if from_loc:
+        tourist_profile.from_location = from_loc
+    if to_loc:
+        tourist_profile.to_location = to_loc
+        
+    db.session.commit()
+    return jsonify({
+        'status': 'success',
+        'message': 'Route updated successfully',
+        'from_location': tourist_profile.from_location,
+        'to_location': tourist_profile.to_location
+    })
 
 @app.route('/api/tourist/alerts')
 @login_required
@@ -1114,11 +1188,10 @@ def api_admin_active_ambulances():
     return jsonify({'ambulances': ambulances_data, 'count': len(ambulances_data)})
 
 @app.route('/api/admin/live-data')
-
 @login_required
 def api_admin_live_data():
     """Get live data for admin dashboard"""
-    if current_user.role != 'ADMIN':
+    if current_user.role not in ['ADMIN', 'POLICE']:
         return jsonify({'error': 'Unauthorized'}), 403
     
     tourists = TouristProfile.query.all()
@@ -1512,6 +1585,8 @@ def forbidden(e):
 # ============== RUN APPLICATION ==============
 
 if __name__ == '__main__':
-    # Development: HTTP on localhost works fine for GPS (Chrome allows it)
-    # Production: Deploy to Render/Railway which gives real HTTPS + GPS works everywhere
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # IMPORTANT: Must run on 127.0.0.1 (localhost), NOT 0.0.0.0
+    # Chrome only allows Geolocation API on: https:// OR localhost/127.0.0.1
+    # Accessing via LAN IP (http://192.168.x.x) will SILENTLY BLOCK GPS — no popup shown!
+    # To access from other devices: use HTTPS or a tunnel like ngrok
+    app.run(debug=True, host='127.0.0.1', port=5000)

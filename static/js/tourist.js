@@ -1,14 +1,28 @@
 /**
  * Tourist Dashboard JavaScript
- * GPS triggers the native browser permission popup automatically on load.
- * User just clicks Allow in the popup — done. No settings needed.
+ * ─────────────────────────────────────────────────────────────────
+ * STRATEGY — 3-tier location (no permission block possible):
+ *
+ *  Tier 1 (INSTANT, 0 ms, ZERO permission):
+ *      Call /api/tourist/ip-location → server looks up the visitor's
+ *      IP address and returns city-level lat/lng immediately.
+ *      Map is placed and location is saved to DB right away.
+ *
+ *  Tier 2 (BETTER, asks permission once):
+ *      navigator.geolocation — if user allows it upgrades to street-
+ *      level accuracy and keeps the marker live. If user denies it
+ *      we stay on Tier 1 silently (no error shown to user).
+ *
+ *  Tier 3 (BACKUP):
+ *      If the IP lookup also fails we centre on India.
+ * ─────────────────────────────────────────────────────────────────
  */
 
 let map, userMarker, accuracyCircle, locationWatchId;
 let statusInterval, alertsInterval;
 
-window._liveGPSLat = null;
-window._liveGPSLng = null;
+window._liveGPSLat = window.LAST_KNOWN_LAT || null;
+window._liveGPSLng = window.LAST_KNOWN_LNG || null;
 
 // ============== PAGE LOAD ==============
 document.addEventListener('DOMContentLoaded', function () {
@@ -21,7 +35,10 @@ function initMap() {
     const mapElement = document.getElementById('touristMap');
     if (!mapElement) return;
 
-    const defaultCenter = { lat: 20.5937, lng: 78.9629 }; // India center
+    const defaultCenter = { 
+        lat: window.LAST_KNOWN_LAT || 20.5937, 
+        lng: window.LAST_KNOWN_LNG || 78.9629 
+    };
 
     map = new google.maps.Map(mapElement, {
         center: defaultCenter,
@@ -48,100 +65,66 @@ function initMap() {
 
     loadGeoFenceCircles();
 
-    // ---- IMMEDIATELY request location (triggers native browser popup) ----
-    requestLiveLocation();
+    // ── DIRECT FORCE GPS ON PAGE LOAD ──
+    setGPSStatus('acquiring', 'Requesting direct GPS location...');
+    tryGPSUpgrade();
 }
 
-// ============== IMMEDIATELY TRIGGER NATIVE BROWSER POPUP ==============
-function requestLiveLocation() {
+// ============== DIRECT GPS FETCH & FALLBACK ==============
+function tryGPSUpgrade() {
     if (!navigator.geolocation) {
-        setGPSStatus('unsupported');
+        fetchIpLocation();
         return;
     }
 
-    // Check if previously blocked — if so show instructions, don't re-ask
-    if (navigator.permissions && navigator.permissions.query) {
-        navigator.permissions.query({ name: 'geolocation' }).then(function (perm) {
-            if (perm.state === 'denied') {
-                // Was previously blocked — native popup will NOT appear again
-                // Show instructions on how to reset it
-                setGPSStatus('blocked');
-            } else {
-                // 'granted' or 'prompt':
-                //   - 'granted': starts silently with no popup
-                //   - 'prompt': browser shows the Allow/Block popup NOW
-                setGPSStatus('acquiring');
-                startGPSWithFallback();
-            }
-
-            // Auto-react if user changes permission in browser settings later
-            perm.addEventListener('change', function () {
-                if (perm.state === 'granted') {
-                    setGPSStatus('acquiring');
-                    startGPSWithFallback();
-                } else if (perm.state === 'denied') {
-                    setGPSStatus('blocked');
-                }
-            });
-        }).catch(function () {
-            // Permissions API not supported — call GPS directly, shows popup
-            setGPSStatus('acquiring');
-            startGPSWithFallback();
-        });
-    } else {
-        // No Permissions API — call GPS directly, browser will show popup
-        setGPSStatus('acquiring');
-        startGPSWithFallback();
-    }
-}
-
-// ============== GPS: HIGH ACCURACY → LOW ACCURACY FALLBACK ==============
-function startGPSWithFallback() {
-    // Try high accuracy first (real GPS / WiFi triangulation)
-    // On laptops without GPS chip this may time out → we fallback to low accuracy
+    // Attempt direct explicit fetch so browser asks permission instantly.
     navigator.geolocation.getCurrentPosition(
         function (pos) {
-            onGPSSuccess(pos);
+            // Success
+            onGPSSuccess(pos, true);
             beginWatching(true);
         },
         function (err) {
+            console.warn("GPS Request Error:", err.message);
             if (err.code === 1) {
-                // User clicked Block in the popup
-                setGPSStatus('blocked');
-                return;
+                // Permission Denied
+                let instr = document.getElementById('gpsBlockedInstructions');
+                if (instr) instr.style.display = 'block';
+                setGPSStatus('blocked', 'GPS blocked, falling back to IP...');
+            } else {
+                setGPSStatus('error', 'GPS unavailable, falling back to IP...');
             }
-            // Timeout or unavailable — retry with low accuracy (IP/WiFi)
-            navigator.geolocation.getCurrentPosition(
-                function (pos) {
-                    onGPSSuccess(pos);
-                    beginWatching(false);
-                },
-                function (err2) {
-                    if (err2.code === 1) {
-                        setGPSStatus('blocked');
-                    } else {
-                        setGPSStatus('error', 'Could not get location. Tap Retry.');
-                    }
-                },
-                { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
-            );
+            fetchIpLocation();
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
 }
 
+function fetchIpLocation() {
+    fetch('/api/tourist/ip-location')
+        .then(r => r.json())
+        .then(data => {
+            if (!window._liveGPSLat) {
+                placeMarker(data.lat, data.lng, data.city ? `${data.city}, ${data.country}` : 'IP Detected Location');
+                setGPSStatus('ip', `📍 ${data.city || 'IP Location'} (Approx.)`);
+            }
+        }).catch(() => {
+            if (!window._liveGPSLat) setGPSStatus('error', 'Could not fetch location.');
+        });
+}
+
 // ============== CONTINUOUS WATCH ==============
-function beginWatching(highAccuracy) {
+function beginWatching(highAccuracy = true) {
     if (locationWatchId != null) return;
     locationWatchId = navigator.geolocation.watchPosition(
-        onGPSSuccess,
-        function (err) { if (err.code === 1) setGPSStatus('blocked'); },
+        pos => onGPSSuccess(pos, highAccuracy),
+        () => { /* silent — already on IP location */ },
         { enableHighAccuracy: highAccuracy, maximumAge: 10000, timeout: 30000 }
     );
 }
 
-// ============== GPS SUCCESS ==============
-function onGPSSuccess(position) {
+// ============== GPS SUCCESS → upgrade from IP to GPS ==============
+function onGPSSuccess(position, highAccuracy) {
     const lat = position.coords.latitude;
     const lng = position.coords.longitude;
     const accuracy = position.coords.accuracy;
@@ -149,122 +132,127 @@ function onGPSSuccess(position) {
     window._liveGPSLat = lat;
     window._liveGPSLng = lng;
 
-    const latLng = new google.maps.LatLng(lat, lng);
-
-    // Move marker & pan map IMMEDIATELY
-    if (userMarker) userMarker.setPosition(latLng);
-    if (map) {
-        map.panTo(latLng);
-        map.setZoom(15);
-    }
+    placeMarker(lat, lng, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    setGPSStatus('active', `±${Math.round(accuracy)}m`);
 
     // Accuracy circle
+    const latLng = new google.maps.LatLng(lat, lng);
     if (accuracyCircle) {
         accuracyCircle.setCenter(latLng);
         accuracyCircle.setRadius(accuracy);
     } else {
         accuracyCircle = new google.maps.Circle({
-            map: map,
-            center: latLng,
-            radius: accuracy,
-            fillColor: '#3b82f6',
-            fillOpacity: 0.12,
-            strokeColor: '#3b82f6',
-            strokeWeight: 1,
-            strokeOpacity: 0.6
+            map, center: latLng, radius: accuracy,
+            fillColor: '#3b82f6', fillOpacity: 0.12,
+            strokeColor: '#3b82f6', strokeWeight: 1, strokeOpacity: 0.6
         });
     }
 
-    const rawCoords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    setGPSStatus('active', `±${Math.round(accuracy)}m`);
-
-    // Update location label immediately
     const locEl = document.getElementById('currentLocation');
-    if (locEl) locEl.textContent = rawCoords;
+    if (locEl) locEl.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
-    // POST real coords to backend immediately
-    fetch('/api/tourist/update-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat, lng, location_name: rawCoords })
-    }).catch(() => {});
+    // POST raw coords immediately
+    pushLocation(lat, lng, `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
 
-    // Reverse geocode to get real address (done async, updates label when ready)
+    // Then reverse-geocode for a human-readable address
     reverseGeocode(lat, lng, function (locationName) {
         if (locEl) locEl.textContent = locationName;
         setGPSStatus('active', locationName);
-        fetch('/api/tourist/update-location', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat, lng, location_name: locationName })
-        }).catch(() => {});
+        pushLocation(lat, lng, locationName);
     });
 }
 
-// ============== BUTTON: RETRY (only shown when blocked/error) ==============
+// ============== PLACE MARKER ON MAP ==============
+function placeMarker(lat, lng, label) {
+    const latLng = new google.maps.LatLng(lat, lng);
+    if (userMarker) userMarker.setPosition(latLng);
+    if (map) { map.panTo(latLng); map.setZoom(14); }
+
+    const locEl = document.getElementById('currentLocation');
+    if (locEl && label) locEl.textContent = label;
+
+    // Save to DB
+    pushLocation(lat, lng, label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+}
+
+// ============== PUSH LOCATION TO BACKEND ==============
+function pushLocation(lat, lng, location_name) {
+    fetch('/api/tourist/update-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lng, location_name })
+    }).catch(() => {});
+}
+
+// ============== MANUAL RETRY BUTTON ==============
 function enableLiveTracking() {
-    if (!navigator.geolocation) { setGPSStatus('unsupported'); return; }
     if (locationWatchId != null) {
         navigator.geolocation.clearWatch(locationWatchId);
         locationWatchId = null;
     }
-    setGPSStatus('acquiring');
-    startGPSWithFallback();
+    window._liveGPSLat = null;
+    window._liveGPSLng = null;
+    setGPSStatus('acquiring', 'Retrying GPS…');
+    tryGPSUpgrade();
 }
 
 // ============== GPS STATUS BAR ==============
 function setGPSStatus(state, detail) {
-    const bar  = document.getElementById('gpsStatusBar');
-    const icon = document.getElementById('gpsStatusIcon');
-    const text = document.getElementById('gpsStatusText');
-    const btn  = document.getElementById('enableGPSBtn');
+    const bar   = document.getElementById('gpsStatusBar');
+    const icon  = document.getElementById('gpsStatusIcon');
+    const text  = document.getElementById('gpsStatusText');
+    const btn   = document.getElementById('enableGPSBtn');
     const instr = document.getElementById('gpsBlockedInstructions');
     if (!bar) return;
+
+    // Always hide blocked instructions unless we explicitly set 'blocked'
+    if (instr && state !== 'blocked') instr.style.display = 'none';
 
     if (state === 'active') {
         bar.style.cssText = 'background:rgba(16,185,129,0.12);border:1px solid #10b981;transition:all 0.4s;';
         if (icon) icon.innerHTML = '<i class="fas fa-satellite-dish text-success"></i>';
-        if (text) text.innerHTML = `<span class="text-success fw-semibold">🟢 Live</span>&nbsp;&nbsp;<small class="text-muted">${detail || 'GPS active'}</small>`;
+        if (text) text.innerHTML = `<span class="text-success fw-semibold">🟢 Live GPS</span>&nbsp;&nbsp;<small class="text-muted">${detail || 'GPS active'}</small>`;
         if (btn)  btn.style.display = 'none';
-        if (instr) instr.style.display = 'none';
+
+    } else if (state === 'ip') {
+        bar.style.cssText = 'background:rgba(59,130,246,0.08);border:1px solid #3b82f6;transition:all 0.4s;';
+        if (icon) icon.innerHTML = '<i class="fas fa-globe text-primary"></i>';
+        if (text) text.innerHTML = `<span class="text-primary fw-semibold">${detail || '📍 Location detected'}</span><small class="text-muted ms-2">— Trying GPS for better accuracy…</small>`;
+        if (btn)  btn.style.display = 'none';
 
     } else if (state === 'acquiring') {
         bar.style.cssText = 'background:rgba(59,130,246,0.1);border:1px solid #3b82f6;transition:all 0.4s;';
         if (icon) icon.innerHTML = '<i class="fas fa-spinner fa-spin text-primary"></i>';
-        if (text) text.innerHTML = '<span class="text-primary fw-semibold">Acquiring GPS…</span><small class="text-muted ms-2">Please allow location when the browser asks</small>';
+        if (text) text.innerHTML = `<span class="text-primary fw-semibold">${detail || 'Detecting location…'}</span>`;
         if (btn)  btn.style.display = 'none';
-        if (instr) instr.style.display = 'none';
 
     } else if (state === 'blocked') {
-        bar.style.cssText = 'background:rgba(239,68,68,0.08);border:1px solid #ef4444;transition:all 0.4s;';
-        if (icon) icon.innerHTML = '<i class="fas fa-ban text-danger"></i>';
-        if (text) text.innerHTML = '<span class="text-danger fw-semibold">Location blocked</span><small class="text-muted ms-2">— you previously denied access</small>';
+        bar.style.cssText = 'background:rgba(245,158,11,0.08);border:1px solid #f59e0b;transition:all 0.4s;';
+        if (icon) icon.innerHTML = '<i class="fas fa-info-circle text-warning"></i>';
+        if (text) text.innerHTML = '<span class="text-warning fw-semibold">Using IP-based location</span><small class="text-muted ms-2">— Allow GPS for better accuracy</small>';
         if (btn) {
             btn.style.display = 'inline-flex';
-            btn.className = 'btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1';
-            btn.innerHTML = '<i class="fas fa-redo"></i> Retry';
+            btn.className = 'btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1';
+            btn.innerHTML = '<i class="fas fa-location-arrow"></i> Enable GPS';
             btn.onclick = enableLiveTracking;
         }
-        if (instr) instr.style.display = 'block';
 
     } else if (state === 'error') {
         bar.style.cssText = 'background:rgba(245,158,11,0.1);border:1px solid #f59e0b;transition:all 0.4s;';
         if (icon) icon.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i>';
-        if (text) text.innerHTML = `<span class="text-warning fw-semibold">${detail || 'GPS error'}</span>`;
+        if (text) text.innerHTML = `<span class="text-warning fw-semibold">${detail || 'GPS unavailable'}</span><small class="text-muted ms-2">— Using IP location</small>`;
         if (btn) {
             btn.style.display = 'inline-flex';
             btn.className = 'btn btn-sm btn-warning d-inline-flex align-items-center gap-1';
-            btn.innerHTML = '<i class="fas fa-redo"></i> Retry';
+            btn.innerHTML = '<i class="fas fa-redo"></i> Retry GPS';
             btn.onclick = enableLiveTracking;
         }
-        if (instr) instr.style.display = 'none';
 
     } else if (state === 'unsupported') {
         bar.style.cssText = 'background:#f3f4f6;border:1px solid #d1d5db;';
-        if (icon) icon.innerHTML = '<i class="fas fa-ban text-muted"></i>';
-        if (text) text.innerHTML = '<span class="text-muted">Geolocation not supported in this browser</span>';
+        if (icon) icon.innerHTML = '<i class="fas fa-globe text-muted"></i>';
+        if (text) text.innerHTML = '<span class="text-muted">Using IP-based location (device has no GPS)</span>';
         if (btn)  btn.style.display = 'none';
-        if (instr) instr.style.display = 'none';
     }
 }
 
@@ -406,14 +394,16 @@ function sendSOSRequest(endpoint, successMsg) {
     if (window._liveGPSLat) {
         reverseGeocode(window._liveGPSLat, window._liveGPSLng,
             name => post(window._liveGPSLat, window._liveGPSLng, name));
-    } else if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            p => reverseGeocode(p.coords.latitude, p.coords.longitude,
-                name => post(p.coords.latitude, p.coords.longitude, name)),
-            () => post(null, null, 'Unknown'),
-            { enableHighAccuracy: false, timeout: 8000 }
-        );
-    } else { post(null, null, 'Unknown'); }
+    } else {
+        // Use the IP location already saved in DB
+        fetch('/api/tourist/ip-location')
+            .then(r => r.json())
+            .then(d => {
+                const name = d.city ? `${d.city}, ${d.country}` : `${d.lat}, ${d.lng}`;
+                post(d.lat, d.lng, name);
+            })
+            .catch(() => post(null, null, 'Unknown'));
+    }
 }
 
 window.updateAlerts = updateAlerts;
